@@ -1,1 +1,0 @@
-/home/colby/Documents/Advent/22/Rust/one/target/debug/one: /home/colby/Documents/Advent/22/Rust/one/src/main.rs /home/colby/Documents/Advent/22/Rust/one/src/part_one.rs /home/colby/Documents/Advent/22/Rust/one/src/part_two.rs
