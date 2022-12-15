@@ -38,4 +38,4 @@ fn main() {
 
         dirs.iter()
             .map(|(rd, cd)| (row as i32 + rd, col as i32 + cd))
-            .filter(|(new_row, new_col
+            .filter(|(new_row, new_col)| (new_row, new_col)
