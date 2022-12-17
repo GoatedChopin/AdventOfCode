@@ -1,4 +1,4 @@
-from shapely.geometry import MultiPolygon, Polygon
+from shapely.geometry import MultiPolygon, Polygon, LineString
 from shapely.ops import unary_union
 
 with open("inputs/15.txt") as file:
@@ -49,49 +49,50 @@ def row_distance(sensor, rownum=2000000):
     return abs(sensor[1] - rownum)
 
 
-def part_one(inputs):
-    print("Getting distances")
-    delta_map = {}
-    for sensor, beacon in inputs:
-        reach = manhattan_distance(sensor, beacon)
-        distance = row_distance(sensor)
-        if reach >= distance and reach not in delta_map:
-            print("Getting all deltas for {}".format(reach))
-            delta_map[reach] = all_deltas(reach)
-
-
-    checked_positions = set()
-    def all_checked_positions(sensor, deltas, y_filter=2000000):
-        for x, y in deltas:
-            next_position = move(sensor, (x, y))
-            if next_position[1] == y_filter:
-                checked_positions.add(next_position)
-
-    return len(checked_positions)
-
-
-# def find_square(sensor, beacon):
-#     distance = manhattan_distance(sensor, beacon)
-#     top = move(sensor, (0, distance))
-#     right = move(sensor, (distance, 0))
-#     down = move(sensor, (0, -distance))
-#     left = move(sensor, (-distance, 0))
-#     return (top, right, down, left)
-
-
-# def find_dimension(squares, axis=0, func=max):
-#     return func(func([s[axis] for s in square] for square in squares))
-
-
 # def part_one(inputs):
-#     points = [find_square(sensor, beacon) for sensor, beacon in inputs]
-#     xmin, xmax = find_dimension(points, 0, min), find_dimension(points, 0, max)
-#     ymin, ymax = find_dimension(points, 1, min), find_dimension(points, 1, max)
-#     mapa = Polygon([(xmin, xmax), (xmin, ymax), (xmax, ymax), (xmax, ymin)])
-#     print(mapa)
-#     polygons = [Polygon(square) for square in points]
-#     squares = MultiPolygon(polygons)
-#     return unary_union(squares).intersection(mapa).area
+#     print("Getting distances")
+#     delta_map = {}
+#     for sensor, beacon in inputs:
+#         reach = manhattan_distance(sensor, beacon)
+#         distance = row_distance(sensor)
+#         if reach >= distance and reach not in delta_map:
+#             print("Getting all deltas for {}".format(reach))
+#             delta_map[reach] = all_deltas(reach)
+
+
+#     checked_positions = set()
+#     def all_checked_positions(sensor, deltas, y_filter=2000000):
+#         for x, y in deltas:
+#             next_position = move(sensor, (x, y))
+#             if next_position[1] == y_filter:
+#                 checked_positions.add(next_position)
+
+#     return len(checked_positions)
+
+
+def find_square(sensor, beacon):
+    distance = manhattan_distance(sensor, beacon)
+    top = move(sensor, (0, distance))
+    right = move(sensor, (distance, 0))
+    down = move(sensor, (0, -distance))
+    left = move(sensor, (-distance, 0))
+    return (top, right, down, left)
+
+
+def find_dimension(squares, axis=0, func=max):
+    return func(func([s[axis] for s in square] for square in squares))
+
+
+def part_one(inputs):
+    points = [find_square(sensor, beacon) for sensor, beacon in inputs]
+    xmin, xmax = find_dimension(points, 0, min), find_dimension(points, 0, max)
+    ymin, ymax = find_dimension(points, 1, min), find_dimension(points, 1, max)
+    # mapa = Polygon([(xmin, xmax), (xmin, ymax), (xmax, ymax), (xmax, ymin)])
+    mapa = LineString([(xmin, 2000000), (xmax, 2000000)]).buffer(1.0)
+    print(mapa)
+    polygons = [Polygon(square) for square in points]
+    squares = MultiPolygon(polygons)
+    return unary_union(squares).intersection(mapa).area
 
 
 # def part_one(inputs):
