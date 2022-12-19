@@ -92,10 +92,10 @@ def drop_rock(rock_shape, tetris, gas_movements, gas_index, highest_rock_index):
     start_col += gas
 
     add_rock(rock_shape, start_row, start_col)
-    return tetris, start_row, gas_index
+    return tetris, start_row-1, gas_index
 
 
-def part_one(gas_movements):
+def part_one(gas_movements, debug=True):
     global tetris
     rock_index = 0
     gas_index = 0
@@ -103,10 +103,11 @@ def part_one(gas_movements):
     for i in range(2022):
         tetris, next_start_row, gas_index = drop_rock(rocks[rock_index], tetris, gas_movements, gas_index, start_row)
         start_row = min(start_row, next_start_row)
-        # for r in range(start_row, len(tetris)):
-        #     print(tetris[r])
-        # if input() == "exit":
-        #     break
+        if debug:
+            for r in range(start_row, len(tetris)):
+                print(tetris[r])
+            if input() == "exit":
+                break
         rock_index += 1
         if rock_index == len(rocks):
             rock_index = 0
@@ -114,7 +115,8 @@ def part_one(gas_movements):
 
 
 if __name__ == "__main__":
-    tetris = part_one(inputs)
+    test_inputs = ">>><<><>><<<>><>>><<<>>><<<><<<>><>><<>>"
+    tetris = part_one(test_inputs, debug=False)
     empty_rows = 0
     while 1 not in tetris[empty_rows]:
         empty_rows += 1
