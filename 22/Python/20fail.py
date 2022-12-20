@@ -1,6 +1,7 @@
 import os
 from llist import dllist, dllistnode
 
+
 with open("inputs" + os.sep + "20.txt") as file:
     dll = dllist([(int(i), False) for i in file.readlines()])
 
