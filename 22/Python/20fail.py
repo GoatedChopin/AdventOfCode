@@ -11,8 +11,8 @@ def new_index(current_index, length_of_list, number):
     if n_i > length_of_list:
         while n_i > length_of_list:
             n_i -= length_of_list
-    elif n_i == 0:
-        n_i = length_of_list
+    elif n_i == length_of_list:
+        return 0
     elif n_i < 0:
         n_i += length_of_list * abs(n_i//length_of_list)
         n_i -= 1
@@ -26,8 +26,6 @@ def move(old_index, new_index):
     if 0 < new_index+1 < len(dll):
         dll.insert(new_node, dll.nodeat(new_index+1))
     elif new_index == 0:
-        dll.appendleft(new_node)
-    else:
         dll.appendright(new_node)
     if new_index < old_index:
         old_index += 1
@@ -56,11 +54,13 @@ def part_one(dll, debug=False):
                 current_index += 1
 
         current_index += 1
-        if current_index == dll_len:
+        if current_index >= dll_len:
             current_index = 0
+        # print("Getting index {}".format(current_index))
         current_node = dll.nodeat(current_index)
 
-
+    if debug:
+        print([i[0] for i in dll])
     # Find index of 0
     zero_index, current_node = 0, dll.first
     while current_node.value[0] != 0:
@@ -94,4 +94,7 @@ if __name__ == "__main__":
 
     # Test input
     dll = dllist([(i, False) for i in [1, 2, -3, 3, -2, 0, 4]])
+    dll = dllist([(i, False) for i in [1, 2, -3, 3, -2, -2, 0, 4]])
+    dll = dllist([(i, False) for i in [0, -1, -1, 1]])
+    # dll = dllist([(i, False) for i in [1, 2, -3, 3, -2, 0, 8]])
     part_one(dll, debug=True)
