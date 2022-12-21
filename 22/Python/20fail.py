@@ -33,6 +33,7 @@ def move(old_index, new_index):
 
 
 def part_one(dll, debug=False):
+    # Move every number (node) exactly one time
     dll_len = len(dll)
     numbers_moved = 0
     current_node, current_index = dll.first, 0
