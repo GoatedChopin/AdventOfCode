@@ -58,7 +58,6 @@ def traverse_snafus(desired_decimal, decimal_places, previous_string=''):
             return possible
 
 
-
 def find_snafu(decimal):
     chars = ['2', '1', '0', '-', '=']
     places = get_snafu_places(decimal)
@@ -71,7 +70,6 @@ def find_snafu(decimal):
             new_snafu = snafu[:snafu_index] + chars[char_index+1] + snafu[snafu_index+1:]
             if snafu_to_decimal(new_snafu) >= decimal:
                 snafu = new_snafu
-                # print(snafu)
                 char_index += 1
             else:
                 snafu_index += 1
@@ -83,8 +81,6 @@ def find_snafu(decimal):
 
 
 def decimal_to_snafu(decimal):
-    # num_places = get_snafu_places(decimal)
-    # return traverse_snafus(decimal, num_places)
     return find_snafu(decimal)
 
 
@@ -99,6 +95,10 @@ if __name__ == "__main__":
     assert snafu_to_decimal("1=0") == 15
     assert snafu_to_decimal("1-0") == 20
     assert snafu_to_decimal("1=11-2") == 2022
+
+    assert decimal_to_snafu(15) == "1=0"
+    assert decimal_to_snafu(20) == "1-0"
+    assert decimal_to_snafu(2022) == "1=11-2"
 
     inputs = get_inputs()
     print(part_one(inputs))
