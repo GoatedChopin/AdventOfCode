@@ -32,9 +32,12 @@ def nice_string_two(string):
             pair = c + string[i+1]
             if pair in d and d[pair] < i - 1:
                 pairs = True
+                print(f"Pair: {pair}")
+            d[pair] = i
         if i < len(string) - 2:
             if string[i+2] == c:
                 letter_gap = True
+                print(f'Gap: {string[i:i+3]}')
     return pairs and letter_gap
 
 
