@@ -24,20 +24,19 @@ def nice_string_one(string):
 
 
 def nice_string_two(string):
+    print(string)
     d = {}
     pairs = False
     letter_gap = False
     for i, c in enumerate(string):
-        if i < len(string) - 1:
-            pair = c + string[i+1]
-            if pair in d and d[pair] < i - 1:
-                pairs = True
-                print(f"Pair: {pair}")
-            d[pair] = i
-        if i < len(string) - 2:
-            if string[i+2] == c:
-                letter_gap = True
-                print(f'Gap: {string[i:i+3]}')
+        pair = string[i:i+2]
+        if len(pair) == 2 and pair in d and d[pair] < i - 1:
+            pairs = True
+            print(f"Pair: {pair}")
+        d[pair] = i
+        if i+2 < len(string) and string[i+2] == c:
+            letter_gap = True
+            print(f'Gap: {string[i:i+3]}')
     return pairs and letter_gap
 
 
@@ -63,5 +62,6 @@ def part_two():
 
 if __name__ == '__main__':
     unit_test()
+    breakpoint()
     part_one()
     part_two()
