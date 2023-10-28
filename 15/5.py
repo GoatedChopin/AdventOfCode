@@ -1,3 +1,5 @@
+import re
+
 from common import get_inputs
 
 
@@ -24,19 +26,22 @@ def nice_string_one(string):
 
 
 def nice_string_two(string):
-    print(string)
+    # print(string)
     d = {}
     pairs = False
     letter_gap = False
     for i, c in enumerate(string):
         pair = string[i:i+2]
+        # print(i, pair)
         if len(pair) == 2 and pair in d and d[pair] < i - 1:
             pairs = True
-            print(f"Pair: {pair}")
-        d[pair] = i
+            # print(f"Pair: {pair}")
+        elif pair not in d:
+            d[pair] = i
         if i+2 < len(string) and string[i+2] == c:
             letter_gap = True
-            print(f'Gap: {string[i:i+3]}')
+            # print(f'Gap: {string[i:i+3]}')
+    # print(d)
     return pairs and letter_gap
 
 
@@ -62,6 +67,6 @@ def part_two():
 
 if __name__ == '__main__':
     unit_test()
-    breakpoint()
+    # breakpoint()
     part_one()
     part_two()
