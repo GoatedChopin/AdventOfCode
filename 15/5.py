@@ -8,7 +8,7 @@ FORBIDDEN = {'ab', 'cd', 'pq', 'xy'}
 VOWELS = {'a', 'e', 'i', 'o', 'u'}
 
 
-def nice_string(string):
+def nice_string_one(string):
     d = {}
     consecutive = False
     vowel_matches = 0
@@ -23,19 +23,42 @@ def nice_string(string):
     return consecutive and vowel_matches > 2
 
 
+def nice_string_two(string):
+    d = {}
+    pairs = False
+    letter_gap = False
+    for i, c in enumerate(string):
+        if i < len(string) - 1:
+            pair = c + string[i+1]
+            if pair in d and d[pair] < i - 1:
+                pairs = True
+        if i < len(string) - 2:
+            if string[i+2] == c:
+                letter_gap = True
+    return pairs and letter_gap
+
+
 def unit_test():
-    assert nice_string('ugknbfddgicrmopn')
-    assert nice_string('aaa')
-    assert not nice_string('jchzalrnumimnmhp')
-    assert not nice_string('haegwjzuvuyypxyu')
-    assert not nice_string('dvszwmarrgswjxmb')
+    assert nice_string_one('ugknbfddgicrmopn')
+    assert nice_string_one('aaa')
+    assert not nice_string_one('jchzalrnumimnmhp')
+    assert not nice_string_one('haegwjzuvuyypxyu')
+    assert not nice_string_one('dvszwmarrgswjxmb')
+    assert nice_string_two('qjhvhtzxzqqjkmpb')
+    assert nice_string_two('xxyxx')
+    assert not nice_string_two('uurcxstgmygtbstg')
+    assert not nice_string_two('ieodomkazucvgmuy')
 
 
 def part_one():
-    print(len([string for string in inputs if nice_string(string)]))
+    print(len([string for string in inputs if nice_string_one(string)]))
 
+
+def part_two():
+    print(len([string for string in inputs if nice_string_two(string)]))
 
 
 if __name__ == '__main__':
     unit_test()
     part_one()
+    part_two()
