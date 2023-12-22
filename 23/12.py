@@ -90,55 +90,8 @@ def parse_and_prune(spring, order):
                 elif current[point] == '?':
                     dot = current[:point] + '.' + current[point+1:]
                     hashtag = current[:point] + '#' + current[point+1:]
-                    # print(dot, ' | ', hashtag, run, point, sub_order, end=' ')
-                    # if dot == '.#.#?#?#?#?#?#??':
-                    #     breakpoint()
-                    # dot_push, hashtag_push = False, False
-                    # if run != 0 and run == order[len(sub_order)]:
-                    #     sub_order.append(run)
-                    #     dot_push = True
-                    #     heappush(permutations, (point+1, sub_order, dot, qs-1))
-                    # elif run == 0:
-                    #     dot_push = True
-                    #     heappush(permutations, (point+1, sub_order, dot, qs-1))
-                    #     if len(sub_order) < len(order):
-                    #         hashtag_push = True
-                    #         while point > 0 and current[point] == '#':
-                    #             point -= 1
-                    #         heappush(permutations, (point, sub_order, hashtag, qs-1))
-                    # elif run != 0 and run < order[len(sub_order)]:
-                        # while point > 0 and current[point] == '#':
-                        #     point -= 1
-                        # hashtag_push = True
-                        # heappush(permutations, (point, sub_order, hashtag, qs-1))
-                    # # print(f'| Pushed {dot}: {dot_push} | Pushed {hashtag}: {hashtag_push}')
-                    # print(run, point, sub_order, order, end=' | ')
-                    # print(len(sub_order)-(current[start] == '#'), order, sub_order)
-                    # if len(sub_order) >= len(order):
-                    #     if sub_order == order:
-                    #         matches += parse_order(current) == order
-                    #     break
-                    # else:
                     heappush(permutations, (0, [], dot, qs-1))
                     heappush(permutations, (0, [], hashtag, qs-1))
-                    # elif run == order[len(sub_order)-(current[start] == '#')]:
-                    #     print('Branch 1')
-                    #     sub_order.append(run)
-                    #     run = 0
-                    #     heappush(permutations, (point+1, sub_order, dot, qs-1))
-                    # elif run != 0 and run < order[len(sub_order)]:
-                    #     while point > 0 and current[point] == '#':
-                    #         point -= 1
-                    #     print(f'Branch 2, {point}')
-                    #     heappush(permutations, (point, sub_order, hashtag, qs-1))
-                    # elif run > order[len(sub_order)]:
-                    #     print('Branch 3')
-                    #     break
-                    # else:
-                    #     print('Branch 4')
-                    #     heappush(permutations, (point+1, sub_order, dot, qs-1))
-                    #     heappush(permutations, (point+1, sub_order, hashtag, qs-1))
-                    # print()
                     break
                 point += 1
         print()
@@ -201,11 +154,26 @@ def part_one(inputs):
     springs, orders = process_inputs(inputs)
     configs = []
     for spring, order in zip(springs, orders):
-        # input(spring + ' ' + str(order))
+        print(spring, order)
+        configs.append(parse_and_prune(spring, order))
+    print(configs)
+    return sum(configs)
+
+
+def part_two(inputs):
+    springs, orders = process_inputs(inputs)
+    configs = []
+    for spring, order in zip(springs, orders):
+        spring = '?'.join([spring]*5)
+        order *= 5
+        print(spring, order)
         configs.append(parse_and_prune(spring, order))
     print(configs)
     return sum(configs)
 
 
 if __name__ == '__main__':
-    print(part_one(inputs))
+    # print(part_one(inputs))
+    print(part_two(test))
+    breakpoint()
+    print(part_two(inputs))
