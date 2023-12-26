@@ -5,6 +5,12 @@ LEFT = (0, -1)
 RIGHT = (0, 1)
 UP = (-1, 0)
 DOWN = (1, 0)
+DISPLAY_CHARS = {
+    LEFT: '<',
+    RIGHT: '>',
+    UP: '^',
+    DOWN: 'v'
+}
 
 
 def standard_inputs(day=1, readlines=False, scrub_newlines=True):
@@ -31,3 +37,9 @@ def lookup(coord, grid, default=None):
     if in_bounds(coord, grid):
         return grid[r][c]
     return default
+
+
+def show_grid(grid, lines='\n', chars=''):
+    grid = [[str(c) for c in line] for line in grid]
+    s = lines.join([chars.join(line) for line in grid])
+    return s

@@ -31,12 +31,6 @@ def all_spelled(line, num):
             i = matches[-1][0] + 1
     except ValueError:
         return matches
-    while num in line[i:]:
-        print(line[i:])
-        match = line[i:].index(num)
-        matches.append((match, SPELLED[num]))
-        i = match + len(num)
-    return matches
 
 
 def indexed_digits(line):
