@@ -61,7 +61,7 @@ const partTwo = (h) => {
             isFile = !isFile;
         }
     })
-    console.log(transformed);
+    // console.log(transformed);
     fileId--;
     while (fileId > 0) {
         for (let i = +h[0]; i < transformed.length; i++) {
@@ -72,12 +72,14 @@ const partTwo = (h) => {
                 }
                 spaceMap[i+fileMap[fileId][1]] = spaceMap[i] - fileMap[fileId][1];
                 spaceMap[i] = 0;
+                break;
             }
         }
         fileId--;
     }
-    console.log(transformed);
-    return transformed.map((v, i) => v * i).reduce((c, i) => c + i);
+    // console.log(transformed);
+    return transformed.map((v, i) => v === null ? 0 : v * i).reduce((c, i) => c + i);
 }
 
-console.log(partTwo('2333133121414131402'));  // 4106 not quite there, should be 2858
+console.log(partTwo('2333133121414131402'));  // 2858 Test case is passing but the real input is "too high"
+console.log(partTwo(i.toString()));

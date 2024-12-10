@@ -25,3 +25,22 @@ export const difference = (c1, c2) => {
 export const multiply = (coord, val) => {
     return coord.map(i => i*val);
 }
+
+export const dirs = (diag=true) => {
+  if (diag) return [
+    [0, 1],
+    [1, 0],
+    [1, 1],
+    [0, -1],
+    [-1, 0],
+    [-1, -1],
+    [1, -1],
+    [-1, 1],
+  ];
+  else return [
+    [0, 1],
+    [1, 0],
+    [0, -1],
+    [-1, 0],
+  ];
+}
