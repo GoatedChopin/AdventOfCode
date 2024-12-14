@@ -1,4 +1,4 @@
-
+import { getInputs } from "./lib/inputs.js";
 
 const t = `190: 10 19
 3267: 81 40 27
@@ -10,6 +10,12 @@ const t = `190: 10 19
 21037: 9 7 18 13
 292: 11 6 16 20`;
 
+const i = getInputs(7).toString().split('\n').map(l => {
+    const line = l.split(': ');
+    const vals = line[1].split(' ').map(i => +i);
+    const key = +line[0];
+    return { key, vals }
+});
 const testInputs = t.split('\n').map(l => {
     const line = l.split(': ');
     const vals = line[1].split(' ').map(i => +i);
@@ -53,17 +59,27 @@ const partOne = (a) => {
         const perms = getPermutations(['+', '*'], vals.length - 1);
         perms.sort((a, b) => +a.map(op => op === '+' ? '1' : '2').join('') - +b.map(op => op === '+' ? '1' : '2').join(''))
         const evals = perms.map(p => {
-            return vals.map((v, i) => {
-                if (p[i]) return v + p[i];
-                return v;
-            }).join('');
+            let parenth = false;
+            let pi = 0
+            return vals.reduce((c, i) => {
+                i = i + '';
+                if (parenth) {
+                    pi++;
+                    return '(' + c + p[pi-1] + i + ')'
+                }
+                else {
+                    parenth = true;
+                    pi++;
+                    return '(' + c + p[pi-1] + i + ')';
+                }
+            });
         });
         for (let i = 0; i < evals.length; i++) {
             const e = evals[i];
-            console.log(e);
+            // console.log(e);
             if (eval(e) === key) {
-                valid++;
-                console.log(e, key, valid);
+                valid += key;
+                // console.log(e, key, valid);
                 break;
             }
         }
@@ -72,3 +88,38 @@ const partOne = (a) => {
 }
 
 console.log(partOne(testInputs))
+// console.log(partOne(i))
+
+const opMap = {
+    '+': (a, b) => a + b,
+    '*': (a, b) => a * b,
+    '||': (a, b) => +`${a}${b}`,
+}
+
+const partTwo = (a) => {
+    let valid = 0
+    a.forEach(args => {
+        const { key, vals } = args;
+        const perms = getPermutations(['+', '*', '||'], vals.length - 1);
+        perms.sort((a, b) => +a.map(op => op === '+' ? '1' : '2').join('') - +b.map(op => op === '+' ? '1' : '2').join(''))
+        const evals = perms.map(p => {
+            let pi = 0;
+            return vals.reduce((c, i) => {
+                if (c > key || c == null) return null;
+                if (i === 0) return 0;
+                pi++;
+                return opMap[p[pi-1]](c, i);
+            });
+        }).filter(v => v !== null);
+        for (let i = 0; i < evals.length; i++) {
+            if (evals[i] === key) {
+                valid += key;
+                break;
+            }
+        }
+    });
+    return valid;
+}
+
+console.log(partTwo(testInputs));
+console.log(partTwo(i));
