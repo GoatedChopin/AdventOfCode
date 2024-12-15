@@ -23,7 +23,33 @@ export const difference = (c1, c2) => {
 };
 
 export const multiply = (coord, val) => {
-    return coord.map(i => i*val);
+  return coord.map(i => i*val);
+}
+
+export const vectorDistance = (vec1, vec2) => {
+  if (vec1.length !== vec2.length) {
+      throw new Error("Vectors must be of the same length.");
+  }
+  return Math.sqrt(vec1.reduce((sum, val, index) => sum + Math.pow(val - vec2[index], 2), 0));
+};
+
+export const divisible = (vec1, vec2) => {
+  if (vec1.length !== vec2.length) return false;
+  return !vec1.some((v, i) => v % vec2[i] !== 0 );
+}
+
+export const divide = (vec1, vec2) => {
+  // do not use this unless you know the vectors are divisible
+  return vec1[0] / vec2[0];
+}
+
+export const vectorMagnitude = (vec) => {
+  return Math.sqrt(vec.reduce((sum, val) => sum + Math.pow(val, 2), 0));
+};
+
+export const determinant = (vec1, vec2) => {
+  // assumes vectors are 2d for now.
+  return (vec1[0] * vec2[1]) - (vec1[1] * vec2[0])
 }
 
 export const dirs = (diag=true) => {
