@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/GoatedChopin/AdventOfCode/16/Go/util"
+	adv "github.com/GoatedChopin/AdventOfCode/16/Go/util"
 )
 
 func Triangles(input []string) int {
@@ -31,12 +31,12 @@ func Triangles(input []string) int {
 
 func VertTriangles(input []string) int {
 	valid := 0
+	triangles := [][]int{
+		{0, 0, 0},
+		{0, 0, 0},
+		{0, 0, 0},
+	}
 	for li, line := range input {
-		triangles := [][]int{
-			{0, 0, 0},
-			{0, 0, 0},
-			{0, 0, 0},
-		}
 		for i, numString := range strings.Split(strings.ReplaceAll(line, "  ", " "), " ") {
 			num, err := strconv.Atoi(strings.TrimSpace(numString))
 			if err != nil {
