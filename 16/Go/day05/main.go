@@ -30,9 +30,9 @@ func placement(hash string) (int, rune, error) {
 			return 0, ' ', errors.New("hash does not begin with 5 zeros")
 		}
 		if i == 5 {
-			p := c - 48
-			if c < 0 || c > 9 {
-				return int(p), ' ', errors.New("bad string")
+			p := c - '0'
+			if p < 0 || p > 7 {
+				return int(p), ' ', errors.New("invalid position character")
 			}
 			position = int(p)
 		}
@@ -89,6 +89,6 @@ func main() {
 	fmt.Printf("%v\n", input)
 	// fmt.Printf("Answer 1: %v\n", search(input, 8))
 	position, char, err := placement("000001545345")
-	fmt.Printf("%v, %v, %v\n", position, char, err)
+	fmt.Printf("%v, %c, %v\n", position, char, err)
 	fmt.Printf("Answer 2: %v\n", research(input, 8))
 }
