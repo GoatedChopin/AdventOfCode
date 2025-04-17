@@ -69,7 +69,10 @@ func validIpv7(s string) bool {
 		}
 		current += c
 	}
-	fmt.Printf("%v\n", ranges)
+	if len(current) > 0 {
+		ranges = append(ranges, seq{current, false})
+	}
+	fmt.Printf("Ranges %v\n", ranges)
 	total := 0
 	for _, r := range ranges {
 		ab := hasAbba(r.s)
@@ -92,9 +95,88 @@ func ipv7Count(lines []string) int {
 	return total
 }
 
+func hasAlt(ranges []seq) bool {
+	alts := make(map[bool]map[string]bool)
+	alts[true] = make(map[string]bool)
+	alts[false] = make(map[string]bool)
+
+	for _, r := range ranges {
+		mode := r.hypernet
+		var a, b, c rune
+		for i, d := range r.s {
+			if i == 0 {
+				a = d
+			} else if i == 1 {
+				b = d
+			} else if i == 2 {
+				c = d
+				if a == c && a != b {
+					// ABA found!
+					if alts[!mode][string([]rune{b, a, b})] {
+						return true
+					}
+					alts[mode][string([]rune{a, b, a})] = true
+				}
+			} else {
+				a = b
+				b = c
+				c = d
+				if a == c && a != b {
+					// ABA found!
+					if alts[!mode][string([]rune{b, a, b})] {
+						return true
+					}
+					alts[mode][string([]rune{a, b, a})] = true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func validSSL(s string) bool {
+	var ranges []seq
+	ind := 0
+	current := ""
+	for c := range strings.SplitSeq(s, "") {
+		if c == "[" {
+			ind++
+			ranges = append(ranges, seq{current, false})
+			current = ""
+			ind++
+			continue
+		} else if c == "]" {
+			ind++
+			ranges = append(ranges, seq{current, true})
+			current = ""
+			ind++
+			continue
+		}
+		current += c
+	}
+	if len(current) > 0 {
+		ranges = append(ranges, seq{current, false})
+	}
+	fmt.Printf("Ranges %v\n", ranges)
+	aba := hasAlt(ranges)
+	return aba
+}
+
+func sslCount(lines []string) int {
+	total := 0
+	for _, line := range lines {
+		if validSSL(line) {
+			total++
+		}
+	}
+	return total
+}
+
 func main() {
 	fmt.Print("Starting day 7\n")
 	inputs := adv.GetInput("7", true, "\n", true)
 	part1 := ipv7Count(inputs)
 	fmt.Printf("%v\n", part1)
+	part2 := sslCount(inputs)
+	fmt.Printf("%v\n", part2)
 }

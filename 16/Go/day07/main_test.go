@@ -44,3 +44,24 @@ func Test_daySeven01(t *testing.T) {
 		})
 	}
 }
+
+func Test_daySeven02(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  bool
+	}{
+		{"actual", "aba[bab]xyz", true},
+		{"actual", "xyx[xyx]xyx", false},
+		{"actual", "aaa[kek]eke", true},
+		{"actual", "zazbz[bzb]cdb", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := validSSL(tt.input); got != tt.want {
+				fmt.Printf("%v\n", tt.input)
+				t.Errorf("SSL = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
