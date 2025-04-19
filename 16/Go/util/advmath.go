@@ -6,3 +6,11 @@ func Abs(i int) int {
 	}
 	return i
 }
+
+func Factorial(n int) int {
+	out := 1
+	for i := n; i > 0; i-- {
+		out *= i
+	}
+	return out
+}

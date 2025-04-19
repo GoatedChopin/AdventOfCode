@@ -81,7 +81,7 @@ func DecompressV2(s string) int {
 }
 
 func main() {
-	fmt.Printf("Starting day 8\n")
+	fmt.Printf("Starting day 9\n")
 	input := adv.GetInput("9", false, "", true)
 	part1 := Decompress(input[0])
 	fmt.Printf("%v\n", len(part1))
