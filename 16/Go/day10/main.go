@@ -1,6 +1,7 @@
 package main
 
 import (
+	"container/heap"
 	"container/list"
 	"fmt"
 	"slices"
@@ -11,38 +12,41 @@ import (
 )
 
 type State struct {
-	building BuildingState // Your state representation
-	steps    int           // Steps taken so far (g(state))
-	priority int           // steps + Heuristic(building) (f(state))
-	index    int           // For heap implementation
+	building [][]RTG // Your state representation
+	steps    int     // Steps taken so far (g(state))
+	floor    int
+	priority int // steps + Heuristic(building) (f(state))
+	index    int // For heap implementation
 }
 
-// PriorityQueue implements heap.Interface
-type PriorityQueue []*State
+type MinHeap []State
 
-func (pq PriorityQueue) Len() int { return len(pq) }
-func (pq PriorityQueue) Less(i, j int) bool {
-	return pq[i].priority < pq[j].priority
+func (h MinHeap) Len() int {
+	return len(h)
 }
-func (pq PriorityQueue) Swap(i, j int) {
-	pq[i], pq[j] = pq[j], pq[i]
-	pq[i].index = i
-	pq[j].index = j
+
+// Less returns true if the element with index i should sort before the element with index j.
+func (h MinHeap) Less(i, j int) bool {
+	return h[i].priority < h[j].priority
 }
-func (pq *PriorityQueue) Push(x interface{}) {
-	n := len(*pq)
-	item := x.(*State)
-	item.index = n
-	*pq = append(*pq, item)
+
+// Swap swaps the elements with indexes i and j.
+func (h MinHeap) Swap(i, j int) {
+	h[i], h[j] = h[j], h[i]
 }
-func (pq *PriorityQueue) Pop() interface{} {
-	old := *pq
+
+// Push pushes the element x onto the heap.
+func (h *MinHeap) Push(x any) {
+	*h = append(*h, x.(State))
+}
+
+// Pop removes and returns the minimum element (according to Less) from the heap.
+func (h *MinHeap) Pop() any {
+	old := *h
 	n := len(old)
-	item := old[n-1]
-	old[n-1] = nil
-	item.index = -1
-	*pq = old[0 : n-1]
-	return item
+	x := old[n-1]
+	*h = old[0 : n-1]
+	return x
 }
 
 type RTG struct {
@@ -111,9 +115,15 @@ func (a BuildingState) Compare(b BuildingState) int {
 func Serialize(building [][]RTG, floor int) string {
 	out := ""
 	out += strconv.Itoa(floor)
+	itemIndex := 0
+	lookup := make(map[string]string)
 	for f := range building {
 		for rtg := range building[f] {
-			out += building[f][rtg].id
+			if lookup[building[f][rtg].id] == "" {
+				lookup[building[f][rtg].id] = strconv.Itoa(itemIndex)
+				itemIndex++
+			}
+			out += lookup[building[f][rtg].id]
 			if building[f][rtg].generator {
 				out += "G"
 			} else if building[f][rtg].microchip {
@@ -136,18 +146,27 @@ func Done(building [][]RTG) bool {
 }
 
 func WalkElevatorConstraint(floor int, steps int, building [][]RTG) int {
-	queue := list.New()
-	visited := make(map[string]bool)
-	queue.PushBack(BuildingState{floor, steps, building, 0})
-	visited[Serialize(building, floor)] = true
+	pq := &MinHeap{}
+	heap.Init(pq)
+	initialState := State{
+		building: building,
+		steps:    0,
+		floor:    0,
+		priority: Heuristic(building),
+	}
+	heap.Push(pq, initialState)
+	visited := make(map[string]int)
+	visited[Serialize(building, floor)] = -1
 
-	for queue.Len() > 0 {
-		front := queue.Front()
-		state := queue.Remove(front).(BuildingState)
+	maxSteps := 0
+
+	for pq.Len() > 0 {
+		state := heap.Pop(pq).(State)
 		// fmt.Println(state) // Use custom String() method
 		floor = state.floor
-		if steps < state.steps {
+		if state.steps > maxSteps {
 			fmt.Printf("Searching steps %v\n", state.steps)
+			maxSteps = state.steps
 		}
 		steps = state.steps
 		building = state.building
@@ -182,9 +201,9 @@ func WalkElevatorConstraint(floor int, steps int, building [][]RTG) int {
 					newBuilding[floor] = currentFloor
 					newBuilding[floor+1] = nextFloor
 					stateKey := Serialize(newBuilding, floor+1)
-					if !visited[stateKey] {
-						visited[stateKey] = true
-						queue.PushBack(BuildingState{floor + 1, steps + 1, newBuilding, 0})
+					if visited[stateKey] == 0 || visited[stateKey] > steps+1 {
+						visited[stateKey] = steps + 1
+						heap.Push(pq, State{newBuilding, steps + 1, floor + 1, steps + Heuristic(newBuilding), 0})
 					}
 				}
 			}
@@ -216,9 +235,9 @@ func WalkElevatorConstraint(floor int, steps int, building [][]RTG) int {
 					newBuilding[floor] = currentFloor
 					newBuilding[floor-1] = prevFloor
 					stateKey := Serialize(newBuilding, floor-1)
-					if !visited[stateKey] {
-						visited[stateKey] = true
-						queue.PushBack(BuildingState{floor - 1, steps + 1, newBuilding, 0})
+					if visited[stateKey] == 0 || visited[stateKey] > steps+1 {
+						visited[stateKey] = steps + 1
+						heap.Push(pq, State{newBuilding, steps + 1, floor - 1, steps + Heuristic(newBuilding), 0})
 					}
 				}
 			}
@@ -237,11 +256,11 @@ func Cost(b BuildingState) int {
 	return cost
 }
 
-func Heuristic(b BuildingState) int {
-	topFloor := len(b.building) - 1
+func Heuristic(b [][]RTG) int {
+	topFloor := len(b) - 1
 	count := 0
 	for i := range topFloor {
-		count += len(b.building[i])
+		count += len(b[i])
 	}
 	return count
 }
@@ -366,7 +385,7 @@ func Building(lines []string) [][]RTG {
 
 func main() {
 	fmt.Printf("Starting day 10\n")
-	inputs := adv.GetInput("10", true, "\n", true)
+	inputs := adv.GetInput("10.2", true, "\n", true)
 	building1 := Building(inputs)
 	part1 := WalkElevatorConstraint(0, 0, building1)
 	fmt.Printf("%v\n", part1)
