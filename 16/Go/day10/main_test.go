@@ -14,6 +14,7 @@ func Test_dayTen00(t *testing.T) {
 			"HM,LM",
 			"HG",
 			"LG",
+			"--",
 		}, 11},
 	}
 	for _, tt := range tests {

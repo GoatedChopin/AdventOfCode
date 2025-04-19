@@ -10,6 +10,41 @@ import (
 	adv "github.com/GoatedChopin/AdventOfCode/16/Go/util"
 )
 
+type State struct {
+	building BuildingState // Your state representation
+	steps    int           // Steps taken so far (g(state))
+	priority int           // steps + Heuristic(building) (f(state))
+	index    int           // For heap implementation
+}
+
+// PriorityQueue implements heap.Interface
+type PriorityQueue []*State
+
+func (pq PriorityQueue) Len() int { return len(pq) }
+func (pq PriorityQueue) Less(i, j int) bool {
+	return pq[i].priority < pq[j].priority
+}
+func (pq PriorityQueue) Swap(i, j int) {
+	pq[i], pq[j] = pq[j], pq[i]
+	pq[i].index = i
+	pq[j].index = j
+}
+func (pq *PriorityQueue) Push(x interface{}) {
+	n := len(*pq)
+	item := x.(*State)
+	item.index = n
+	*pq = append(*pq, item)
+}
+func (pq *PriorityQueue) Pop() interface{} {
+	old := *pq
+	n := len(old)
+	item := old[n-1]
+	old[n-1] = nil
+	item.index = -1
+	*pq = old[0 : n-1]
+	return item
+}
+
 type RTG struct {
 	id        string
 	generator bool
@@ -62,6 +97,15 @@ type BuildingState struct {
 	floor    int
 	steps    int
 	building [][]RTG
+	cost     int
+}
+
+func (a BuildingState) Compare(b BuildingState) int {
+	if a.cost < b.cost {
+		return -1
+	} else {
+		return 1
+	}
 }
 
 func Serialize(building [][]RTG, floor int) string {
@@ -94,33 +138,25 @@ func Done(building [][]RTG) bool {
 func WalkElevatorConstraint(floor int, steps int, building [][]RTG) int {
 	queue := list.New()
 	visited := make(map[string]bool)
-	queue.PushBack(BuildingState{floor, steps, building})
-	allowDown := false
+	queue.PushBack(BuildingState{floor, steps, building, 0})
+	visited[Serialize(building, floor)] = true
+
 	for queue.Len() > 0 {
 		front := queue.Front()
 		state := queue.Remove(front).(BuildingState)
-		fmt.Printf("%v\n\n", state)
+		// fmt.Println(state) // Use custom String() method
 		floor = state.floor
+		if steps < state.steps {
+			fmt.Printf("Searching steps %v\n", state.steps)
+		}
 		steps = state.steps
 		building = state.building
-		stateKey := Serialize(building, floor)
-		if visited[stateKey] {
-			continue
-		}
-		visited[stateKey] = true
 
 		if Done(building) {
 			return steps
 		}
-		allowDown = false
-		for i := range floor {
-			if len(building[i]) > 0 {
-				// CANNOT GO DOWN WITHOUT A COMPONENT
-				// queue.PushBack(BuildingState{floor - 1, steps + 1, building})
-				allowDown = true
-				break
-			}
-		}
+
+		// Move up
 		if floor < len(building)-1 {
 			for combo := range adv.FixedLengthCombinations(len(building[floor]), 2, true, 1) {
 				if len(combo) == 0 {
@@ -136,60 +172,54 @@ func WalkElevatorConstraint(floor int, steps int, building [][]RTG) int {
 						currentFloor = append(currentFloor, rtg)
 					}
 				}
-				if !SafeFloor(currentFloor) {
-					continue
-				}
-
-				// Try moving down
-				if allowDown {
-					fmt.Print("Moving down is feasible? ")
-					prevFloor := slices.Concat(building[floor-1], armfull)
-					if SafeFloor(prevFloor) {
-						fmt.Printf("(Yes) %v\n%v", combo, state)
-						newBuilding := make([][]RTG, len(building))
-						for i := range building {
-							newBuilding[i] = make([]RTG, len(building[i]))
-							copy(newBuilding[i], building[i])
-						}
-						newBuilding[floor] = []RTG{}
-						for _, rtg := range building[floor] {
-							if slices.Contains(armfull, rtg) {
-								continue
-							}
-							newBuilding[floor] = append(newBuilding[floor], rtg)
-						}
-						newBuilding[floor-1] = slices.Concat(building[floor-1], armfull)
-						stateKey := Serialize(newBuilding, floor-1)
-						if visited[stateKey] {
-							continue
-						}
-						queue.PushBack(BuildingState{floor + 1, steps + 1, newBuilding})
-					} else {
-						fmt.Printf("(No) %v\n%v", combo, state)
-					}
-				}
-
-				// Try moving up
 				nextFloor := slices.Concat(building[floor+1], armfull)
-				if SafeFloor(nextFloor) {
+				if SafeFloor(currentFloor) && SafeFloor(nextFloor) {
 					newBuilding := make([][]RTG, len(building))
 					for i := range building {
 						newBuilding[i] = make([]RTG, len(building[i]))
 						copy(newBuilding[i], building[i])
 					}
-					newBuilding[floor] = []RTG{}
-					for _, rtg := range building[floor] {
-						if slices.Contains(armfull, rtg) {
-							continue
-						}
-						newBuilding[floor] = append(newBuilding[floor], rtg)
-					}
-					newBuilding[floor+1] = slices.Concat(building[floor+1], armfull)
+					newBuilding[floor] = currentFloor
+					newBuilding[floor+1] = nextFloor
 					stateKey := Serialize(newBuilding, floor+1)
-					if visited[stateKey] {
-						continue
+					if !visited[stateKey] {
+						visited[stateKey] = true
+						queue.PushBack(BuildingState{floor + 1, steps + 1, newBuilding, 0})
 					}
-					queue.PushBack(BuildingState{floor + 1, steps + 1, newBuilding})
+				}
+			}
+		}
+
+		// Move down (now independent)
+		if floor > 0 {
+			for combo := range adv.FixedLengthCombinations(len(building[floor]), 2, true, 1) {
+				if len(combo) == 0 {
+					continue
+				}
+				armfull := make([]RTG, len(combo))
+				for i, idx := range combo {
+					armfull[i] = building[floor][idx]
+				}
+				currentFloor := make([]RTG, 0, len(building[floor])-len(armfull))
+				for _, rtg := range building[floor] {
+					if !slices.Contains(armfull, rtg) {
+						currentFloor = append(currentFloor, rtg)
+					}
+				}
+				prevFloor := slices.Concat(building[floor-1], armfull)
+				if SafeFloor(currentFloor) && SafeFloor(prevFloor) {
+					newBuilding := make([][]RTG, len(building))
+					for i := range building {
+						newBuilding[i] = make([]RTG, len(building[i]))
+						copy(newBuilding[i], building[i])
+					}
+					newBuilding[floor] = currentFloor
+					newBuilding[floor-1] = prevFloor
+					stateKey := Serialize(newBuilding, floor-1)
+					if !visited[stateKey] {
+						visited[stateKey] = true
+						queue.PushBack(BuildingState{floor - 1, steps + 1, newBuilding, 0})
+					}
 				}
 			}
 		}
@@ -197,14 +227,33 @@ func WalkElevatorConstraint(floor int, steps int, building [][]RTG) int {
 	return -1
 }
 
+func Cost(b BuildingState) int {
+	cost := 0
+	for i, floor := range b.building {
+		for range floor {
+			cost += len(b.building) - i
+		}
+	}
+	return cost
+}
+
+func Heuristic(b BuildingState) int {
+	topFloor := len(b.building) - 1
+	count := 0
+	for i := range topFloor {
+		count += len(b.building[i])
+	}
+	return count
+}
+
 func Walk(floor int, steps int, building [][]RTG) int {
 	queue := list.New()
 	visited := make(map[string]bool)
-	queue.PushBack(BuildingState{floor, steps, building})
+	queue.PushBack(BuildingState{floor, steps, building, 0})
 	for queue.Len() > 0 {
 		front := queue.Front()
 		state := queue.Remove(front).(BuildingState)
-		fmt.Printf("%v\n\n", state)
+		// fmt.Printf("%v\n\n", state)
 		floor = state.floor
 		steps = state.steps
 		building = state.building
@@ -219,7 +268,7 @@ func Walk(floor int, steps int, building [][]RTG) int {
 		}
 		for i := range floor {
 			if len(building[i]) > 0 {
-				queue.PushBack(BuildingState{floor - 1, steps + 1, building})
+				queue.PushBack(BuildingState{floor - 1, steps + 1, building, 0})
 				break
 			}
 		}
@@ -251,7 +300,7 @@ func Walk(floor int, steps int, building [][]RTG) int {
 						newBuilding[floor] = append(newBuilding[floor], rtg)
 					}
 					newBuilding[floor+1] = slices.Concat(building[floor+1], armfull)
-					queue.PushBack(BuildingState{floor + 1, steps + 1, newBuilding})
+					queue.PushBack(BuildingState{floor + 1, steps + 1, newBuilding, 0})
 				}
 			}
 		}
@@ -286,7 +335,11 @@ func (s BuildingState) String() string {
 			}
 		}
 		slices.Sort(items)
-		b.WriteString(strings.Join(items, ","))
+		if len(items) > 0 {
+			b.WriteString(strings.Join(items, ","))
+		} else {
+			b.WriteString("--")
+		}
 		b.WriteString("\n")
 	}
 	return header + b.String()
@@ -307,6 +360,7 @@ func Building(lines []string) [][]RTG {
 			}
 		}
 	}
+	fmt.Printf("Len of lines %d, building %d", len(lines), len(building))
 	return building
 }
 
@@ -314,6 +368,6 @@ func main() {
 	fmt.Printf("Starting day 10\n")
 	inputs := adv.GetInput("10", true, "\n", true)
 	building1 := Building(inputs)
-	part1 := Walk(0, 0, building1)
+	part1 := WalkElevatorConstraint(0, 0, building1)
 	fmt.Printf("%v\n", part1)
 }
