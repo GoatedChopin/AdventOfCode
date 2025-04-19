@@ -4,6 +4,7 @@ import (
 	"container/list"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 
 	adv "github.com/GoatedChopin/AdventOfCode/16/Go/util"
@@ -65,7 +66,7 @@ type BuildingState struct {
 
 func Serialize(building [][]RTG, floor int) string {
 	out := ""
-	out += string(floor)
+	out += strconv.Itoa(floor)
 	for f := range building {
 		for rtg := range building[f] {
 			out += building[f][rtg].id
@@ -90,6 +91,112 @@ func Done(building [][]RTG) bool {
 	return true
 }
 
+func WalkElevatorConstraint(floor int, steps int, building [][]RTG) int {
+	queue := list.New()
+	visited := make(map[string]bool)
+	queue.PushBack(BuildingState{floor, steps, building})
+	allowDown := false
+	for queue.Len() > 0 {
+		front := queue.Front()
+		state := queue.Remove(front).(BuildingState)
+		fmt.Printf("%v\n\n", state)
+		floor = state.floor
+		steps = state.steps
+		building = state.building
+		stateKey := Serialize(building, floor)
+		if visited[stateKey] {
+			continue
+		}
+		visited[stateKey] = true
+
+		if Done(building) {
+			return steps
+		}
+		allowDown = false
+		for i := range floor {
+			if len(building[i]) > 0 {
+				// CANNOT GO DOWN WITHOUT A COMPONENT
+				// queue.PushBack(BuildingState{floor - 1, steps + 1, building})
+				allowDown = true
+				break
+			}
+		}
+		if floor < len(building)-1 {
+			for combo := range adv.FixedLengthCombinations(len(building[floor]), 2, true, 1) {
+				if len(combo) == 0 {
+					continue
+				}
+				armfull := make([]RTG, len(combo))
+				for i, idx := range combo {
+					armfull[i] = building[floor][idx]
+				}
+				currentFloor := make([]RTG, 0, len(building[floor])-len(armfull))
+				for _, rtg := range building[floor] {
+					if !slices.Contains(armfull, rtg) {
+						currentFloor = append(currentFloor, rtg)
+					}
+				}
+				if !SafeFloor(currentFloor) {
+					continue
+				}
+
+				// Try moving down
+				if allowDown {
+					fmt.Print("Moving down is feasible? ")
+					prevFloor := slices.Concat(building[floor-1], armfull)
+					if SafeFloor(prevFloor) {
+						fmt.Printf("(Yes) %v\n%v", combo, state)
+						newBuilding := make([][]RTG, len(building))
+						for i := range building {
+							newBuilding[i] = make([]RTG, len(building[i]))
+							copy(newBuilding[i], building[i])
+						}
+						newBuilding[floor] = []RTG{}
+						for _, rtg := range building[floor] {
+							if slices.Contains(armfull, rtg) {
+								continue
+							}
+							newBuilding[floor] = append(newBuilding[floor], rtg)
+						}
+						newBuilding[floor-1] = slices.Concat(building[floor-1], armfull)
+						stateKey := Serialize(newBuilding, floor-1)
+						if visited[stateKey] {
+							continue
+						}
+						queue.PushBack(BuildingState{floor + 1, steps + 1, newBuilding})
+					} else {
+						fmt.Printf("(No) %v\n%v", combo, state)
+					}
+				}
+
+				// Try moving up
+				nextFloor := slices.Concat(building[floor+1], armfull)
+				if SafeFloor(nextFloor) {
+					newBuilding := make([][]RTG, len(building))
+					for i := range building {
+						newBuilding[i] = make([]RTG, len(building[i]))
+						copy(newBuilding[i], building[i])
+					}
+					newBuilding[floor] = []RTG{}
+					for _, rtg := range building[floor] {
+						if slices.Contains(armfull, rtg) {
+							continue
+						}
+						newBuilding[floor] = append(newBuilding[floor], rtg)
+					}
+					newBuilding[floor+1] = slices.Concat(building[floor+1], armfull)
+					stateKey := Serialize(newBuilding, floor+1)
+					if visited[stateKey] {
+						continue
+					}
+					queue.PushBack(BuildingState{floor + 1, steps + 1, newBuilding})
+				}
+			}
+		}
+	}
+	return -1
+}
+
 func Walk(floor int, steps int, building [][]RTG) int {
 	queue := list.New()
 	visited := make(map[string]bool)
@@ -110,14 +217,14 @@ func Walk(floor int, steps int, building [][]RTG) int {
 		if Done(building) {
 			return steps
 		}
-		for i := 0; i < floor; i++ {
+		for i := range floor {
 			if len(building[i]) > 0 {
 				queue.PushBack(BuildingState{floor - 1, steps + 1, building})
 				break
 			}
 		}
 		if floor < len(building)-1 {
-			for combo := range adv.FixedLengthCombinations(len(building[floor]), 2, true) {
+			for combo := range adv.FixedLengthCombinations(len(building[floor]), 2, true, 1) {
 				armfull := make([]RTG, len(combo))
 				for i, idx := range combo {
 					armfull[i] = building[floor][idx]
@@ -132,7 +239,7 @@ func Walk(floor int, steps int, building [][]RTG) int {
 				}
 				if SafeFloor(nextFloor) && SafeFloor(currentFloor) {
 					newBuilding := make([][]RTG, len(building))
-					for i := range floor {
+					for i := range building {
 						newBuilding[i] = make([]RTG, len(building[i]))
 						copy(newBuilding[i], building[i])
 					}
@@ -153,6 +260,7 @@ func Walk(floor int, steps int, building [][]RTG) int {
 }
 
 func (s BuildingState) String() string {
+	header := "Steps " + strconv.Itoa(s.steps) + ":\n"
 	var b strings.Builder
 	for i := len(s.building) - 1; i >= 0; i-- {
 		// Print floor number
@@ -181,23 +289,22 @@ func (s BuildingState) String() string {
 		b.WriteString(strings.Join(items, ","))
 		b.WriteString("\n")
 	}
-	return b.String()
+	return header + b.String()
 }
 
 func Building(lines []string) [][]RTG {
-	totalParts := 0
 	building := make([][]RTG, len(lines))
 	for i, line := range lines {
 		fmt.Printf("%v\n", line)
 		if line == "--" {
-			building[i] = make([]RTG, totalParts)
-		}
-		parts := strings.Split(line, ",")
-		building[i] = make([]RTG, len(parts))
-		for p, part := range parts {
-			chars := strings.Split(part, "")
-			building[i][p] = RTG{chars[0], chars[1] == "G", chars[1] == "M"}
-			totalParts++
+			building[i] = []RTG{}
+		} else {
+			parts := strings.Split(line, ",")
+			building[i] = make([]RTG, len(parts))
+			for p, part := range parts {
+				chars := strings.Split(part, "")
+				building[i][p] = RTG{chars[0], chars[1] == "G", chars[1] == "M"}
+			}
 		}
 	}
 	return building
