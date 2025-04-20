@@ -210,7 +210,13 @@ func WalkElevatorConstraint(floor int, steps int, building [][]RTG) int {
 		}
 
 		// Move down (now independent)
-		if floor > 0 {
+		elementsBelowUs := 0
+		for f := range floor {
+			for range building[f] {
+				elementsBelowUs++
+			}
+		}
+		if floor > 0 && elementsBelowUs > 0 {
 			for combo := range adv.FixedLengthCombinations(len(building[floor]), 2, true, 1) {
 				if len(combo) == 0 {
 					continue
