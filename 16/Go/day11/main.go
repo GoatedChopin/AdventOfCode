@@ -2,7 +2,6 @@ package main
 
 import (
 	"container/heap"
-	"container/list"
 	"fmt"
 	"slices"
 	"strconv"
@@ -271,68 +270,6 @@ func Heuristic(b [][]RTG) int {
 	return count
 }
 
-func Walk(floor int, steps int, building [][]RTG) int {
-	queue := list.New()
-	visited := make(map[string]bool)
-	queue.PushBack(BuildingState{floor, steps, building, 0})
-	for queue.Len() > 0 {
-		front := queue.Front()
-		state := queue.Remove(front).(BuildingState)
-		// fmt.Printf("%v\n\n", state)
-		floor = state.floor
-		steps = state.steps
-		building = state.building
-		stateKey := Serialize(building, floor)
-		if visited[stateKey] {
-			continue
-		}
-		visited[stateKey] = true
-
-		if Done(building) {
-			return steps
-		}
-		for i := range floor {
-			if len(building[i]) > 0 {
-				queue.PushBack(BuildingState{floor - 1, steps + 1, building, 0})
-				break
-			}
-		}
-		if floor < len(building)-1 {
-			for combo := range adv.FixedLengthCombinations(len(building[floor]), 2, true, 1) {
-				armfull := make([]RTG, len(combo))
-				for i, idx := range combo {
-					armfull[i] = building[floor][idx]
-				}
-
-				nextFloor := slices.Concat(building[floor+1], armfull)
-				currentFloor := make([]RTG, 0, len(building[floor])-len(armfull))
-				for _, rtg := range building[floor] {
-					if !slices.Contains(armfull, rtg) {
-						currentFloor = append(currentFloor, rtg)
-					}
-				}
-				if SafeFloor(nextFloor) && SafeFloor(currentFloor) {
-					newBuilding := make([][]RTG, len(building))
-					for i := range building {
-						newBuilding[i] = make([]RTG, len(building[i]))
-						copy(newBuilding[i], building[i])
-					}
-					newBuilding[floor] = []RTG{}
-					for _, rtg := range building[floor] {
-						if slices.Contains(armfull, rtg) {
-							continue
-						}
-						newBuilding[floor] = append(newBuilding[floor], rtg)
-					}
-					newBuilding[floor+1] = slices.Concat(building[floor+1], armfull)
-					queue.PushBack(BuildingState{floor + 1, steps + 1, newBuilding, 0})
-				}
-			}
-		}
-	}
-	return -1
-}
-
 func (s BuildingState) String() string {
 	header := "Steps " + strconv.Itoa(s.steps) + ":\n"
 	var b strings.Builder
@@ -390,8 +327,8 @@ func Building(lines []string) [][]RTG {
 }
 
 func main() {
-	fmt.Printf("Starting day 10\n")
-	inputs := adv.GetInput("10.2", true, "\n", true)
+	fmt.Printf("Starting day 11\n")
+	inputs := adv.GetInput("11.2", true, "\n", true)
 	building1 := Building(inputs)
 	part1 := WalkElevatorConstraint(0, 0, building1)
 	fmt.Printf("%v\n", part1)
