@@ -1,10 +1,6 @@
 package main
 
 import (
-	"crypto/md5"
-	"encoding/hex"
-	"strconv"
-
 	"testing"
 )
 
@@ -13,23 +9,24 @@ import (
 func Test_dayFourteen00(t *testing.T) {
 	tests := []struct {
 		name   string
-		inputs string
+		inputs []string
 		want   int
 	}{
-		{"actual", "abc", 22728},
+		{"actual", []string{"5,4", "2,1"}, 5},
 	}
 	// three, fives := CountChars("hhhaaaaabbccdksll")
 	// fmt.Printf("%c | %v", three, fives)
-	t.Run("stretch", func(t *testing.T) {
-		bytes := md5.Sum([]byte(strconv.Itoa(1) + "abc"))
-		hash := hex.EncodeToString(bytes[:])
-		if got := stretchedHash(1, "abc", 1); got != hash {
-			t.Errorf("1abc = %v, want %v", got, hash)
-		}
-	})
+	// t.Run("First time", func(t *testing.T) {
+	// 	if got := Drop(0, []Sphere{{5, 4, 4}, {2, 1, 1}}); got != false {
+	// 		t.Errorf("Test case failed, wanted false")
+	// 	}
+	// 	if got := Drop(2, []Sphere{{5, 4, 4}, {2, 1, 1}}); got != true {
+	// 		t.Errorf("Test case failed, wanted true")
+	// 	}
+	// })
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := Hashes(64, tt.inputs, 1); got != tt.want {
+			if got := FindFirstDrop(tt.inputs); got != tt.want {
 				t.Errorf("%v = %v, want %v", tt.inputs, got, tt.want)
 			}
 		})
