@@ -32,6 +32,7 @@ func inBounds(v Vec) bool {
 func GetMoves(v Vec) []Vec {
 	out := make([]Vec, 0)
 	dirs := []Vec{{1, 0, 'D'}, {-1, 0, 'U'}, {0, 1, 'R'}, {0, -1, 'L'}}
+	// dirs := []Vec{{0, -1, 'U'}, {0, 1, 'D'}, {-1, 0, 'L'}, {1, 0, 'R'}}
 	for _, dir := range dirs {
 		newV := move(v, dir)
 		if inBounds(newV) {
@@ -41,31 +42,29 @@ func GetMoves(v Vec) []Vec {
 	return out
 }
 
-func Unlocked(runes []rune, vecs []Vec) []Vec {
-	// Make MD5 hash
-	sum := md5.Sum([]byte(string(runes)))
+func Unlocked(passcode []rune, position Vec) []Vec {
+	sum := md5.Sum([]byte(string(passcode)))
 	hash := hex.EncodeToString(sum[:])
+	fmt.Printf("%v ", hash)
 	unlockChars := map[rune]bool{
 		'b': true, 'c': true, 'd': true, 'e': true, 'f': true,
 	}
-	dirs := []rune{'U', 'D', 'L', 'R'}
-	out := make([]rune, 0)
-	for i, c := range hash {
-		if i < 4 && unlockChars[c] {
-			out = append(out, dirs[i])
-		}
+	dirs := []Vec{
+		{-1, 0, 'U'},
+		{1, 0, 'D'},
+		{0, -1, 'L'},
+		{0, 1, 'R'},
 	}
-	unlocked := make([]Vec, 0)
-	for _, r := range out {
-		for _, v := range vecs {
-			if v.label == r {
-				unlocked = append(unlocked, v)
-				break
+	out := make([]Vec, 0)
+	for i := range 4 {
+		if unlockChars[rune(hash[i])] {
+			newV := move(position, dirs[i])
+			if inBounds(newV) {
+				out = append(out, dirs[i])
 			}
 		}
 	}
-	fmt.Printf("%v\t%v\t%v\t%v\n", string(runes), hash, string(out), len(unlocked))
-	return unlocked
+	return out
 }
 
 func Pathfind(s string) string {
@@ -75,14 +74,18 @@ func Pathfind(s string) string {
 		front := queue.Front()
 		path := queue.Remove(front).(Path)
 		position := path.currentPosition
-		fmt.Printf("(%v, %v) ", position.x, position.y)
 		if position.x == 3 && position.y == 3 {
-			return string(path.runes)
+			return string(path.runes[len(s):])
 		}
-		nextPositions := GetMoves(position)
-		unlockedPositions := Unlocked(path.runes, nextPositions)
+		// nextPositions := GetMoves(position)
+		unlockedPositions := Unlocked(path.runes, position)
+		fmt.Printf("(%v, %v) %v\t", position.x, position.y, string(path.runes))
+		for _, pos := range unlockedPositions {
+			fmt.Printf("(%v, %v, %c) ", pos.x, pos.y, pos.label)
+		}
+		fmt.Printf("\n")
 		for _, p := range unlockedPositions {
-			queue.PushBack(Path{append(path.runes, p.label), p})
+			queue.PushBack(Path{append(path.runes, p.label), move(position, p)})
 		}
 	}
 	return ""
