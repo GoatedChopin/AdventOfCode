@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+
+	"container/list"
 )
 
 func WhiteElephant(i int) int {
@@ -43,52 +45,34 @@ func WhiteElephant(i int) int {
 	return p + 1
 }
 
-func FrontalWhiteElephant(i int) int {
-	p := 0
-	players := i
-	elves := make([]int, i)
-	for e := range elves {
-		elves[e] = 1
-	}
-	for players > 1 {
-		passes := (players / 2) - 1
-		np := p + 1
-		if np >= i {
-			np -= i
-		}
-		for (elves[np] == 0 || passes > 0) && np != p {
-			if np == p {
-				panic("Why the fuck")
-			}
-			if elves[np] == 1 {
-				passes--
-			}
-			np++
-			if np >= i {
-				np = 0
-			}
-		}
-		if np == p {
-			break
-		}
-		elves[p] += elves[np]
-		elves[np] = 0
-		if players%500 == 0 {
-			fmt.Printf("%v -> %v -> %v\n", players, p, np)
-		}
-		players--
-		p++
-		if p >= i {
-			p = 0
-		}
-		for elves[p] == 0 {
-			p++
-			if p >= i {
-				p = 0
-			}
+func FrontalWhiteElephant(n int) int {
+	left := list.New()
+	right := list.New()
+
+	for i := 1; i <= n; i++ {
+		if i <= n/2 {
+			left.PushBack(i)
+		} else {
+			right.PushFront(i)
 		}
 	}
-	return p + 1
+
+	for left.Len() > 0 && right.Len() > 0 {
+		if left.Len() > right.Len() {
+			left.Remove(left.Back())
+		} else {
+			right.Remove(right.Back())
+		}
+
+		// Rotate
+		right.PushFront(left.Remove(left.Front()))
+		left.PushBack(right.Remove(right.Back()))
+	}
+
+	if left.Len() > 0 {
+		return left.Front().Value.(int)
+	}
+	return right.Front().Value.(int)
 }
 
 func main() {
