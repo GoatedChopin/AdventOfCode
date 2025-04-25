@@ -25,13 +25,7 @@ func (u IpRangeArray) Swap(i, j int) {
 }
 
 func (u IpRangeArray) Less(i, j int) bool {
-	if u[i].lower < u[j].lower {
-		return true
-	}
-	if u[i].upper < u[j].upper {
-		return true
-	}
-	return false
+	return u[i].lower < u[j].lower
 }
 
 func ParseRange(s string) IpRange {
@@ -70,32 +64,48 @@ func LowestAllowedIp(lines []string) int {
 }
 
 func AllAllowedIps(lines []string) int {
-	max := 4294967295
 	ipRanges := make(IpRangeArray, len(lines))
-	mergedRanges := make(IpRangeArray, 1)
 	for i, s := range lines {
 		ipRanges[i] = ParseRange(s)
 	}
-	mergedRanges[0] = ipRanges[0]
 	sort.Sort(ipRanges)
-	m := 0
-	i, j := 0, 1
-	for j < len(ipRanges) {
-		for j < len(ipRanges) && ipRanges[j].lower-ipRanges[i].upper <= 1 {
-			mergedRanges[m] = IpRange{mergedRanges[m].lower, ipRanges[j].upper}
-			j++
+
+	var mergedRanges []IpRange
+	current := ipRanges[0]
+
+	for i := 1; i < len(ipRanges); i++ {
+		next := ipRanges[i]
+		if next.lower <= current.upper+1 {
+			// Merge ranges
+			if next.upper > current.upper {
+				current.upper = next.upper
+			}
+		} else {
+			// No overlap, push current and move on
+			mergedRanges = append(mergedRanges, current)
+			current = next
 		}
-		if ipRanges[j].lower > ipRanges[i].lower+1 {
-			mergedRanges = append(mergedRanges, ipRanges[j])
-			m++
-		}
-		i = j
-		j++
 	}
+	mergedRanges = append(mergedRanges, current)
+
+	// Count allowed IPs
+	allowed := 0
+	prevUpper := -1
 	for _, r := range mergedRanges {
-		max -= r.upper - r.lower
+		if r.lower > prevUpper+1 {
+			allowed += r.lower - (prevUpper + 1)
+		}
+		if r.upper > prevUpper {
+			prevUpper = r.upper
+		}
 	}
-	return max
+	// Final range to 2^32-1
+	const maxIp = 4294967295
+	if prevUpper < maxIp {
+		allowed += maxIp - prevUpper
+	}
+
+	return allowed
 }
 
 func main() {
