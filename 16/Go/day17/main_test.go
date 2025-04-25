@@ -15,9 +15,9 @@ func Test_dayFourteen00(t *testing.T) {
 		{"actual", []string{"5,4", "2,1"}, 5},
 	}
 	t.Run("Pathfinding", func(t *testing.T) {
-		// if got := Pathfind("ihgpwlah"); got != "DDRRRD" {
-		// 	t.Errorf("%v = %v, want %v", "ihgpwlah", got, "DDRRRD")
-		// }
+		if got := Pathfind("ihgpwlah"); got != "DDRRRD" {
+			t.Errorf("%v = %v, want %v", "ihgpwlah", got, "DDRRRD")
+		}
 		if got := Pathfind("kglvqrro"); got != "DDUDRLRRUDRD" {
 			t.Errorf("%v = %v, want %v", "kglvqrro", got, "DDUDRLRRUDRD")
 		}
