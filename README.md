@@ -2,7 +2,9 @@
 
 [Advent of Code](https://adventofcode.com/) is an annual advent calendar with daily coding puzzles to be solved in any programming language of the participant's choice.
 
-I am bad at solving these, but getting better each year. 
+I am bad at solving these, but getting better each year.
+
+2016 is part of my Golang self-learning journey
 
 In 2021, I solved 30% of the puzzles, for a total of 15 stars out of 50  (Java, primarily)
 
