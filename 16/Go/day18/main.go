@@ -66,7 +66,7 @@ func SafeTiles(s string, i int) int {
 }
 
 func main() {
-	fmt.Print("Starting day 15\n")
+	fmt.Print("Starting day 18\n")
 	input := adv.GetInput("18", false, "", true)
 	part1 := SafeTiles(input[0], 40)
 	fmt.Printf("Part 1: %v\n", part1)

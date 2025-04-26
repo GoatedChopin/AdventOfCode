@@ -89,7 +89,7 @@ func Pathfind(s string) string {
 }
 
 func main() {
-	fmt.Print("Starting day 15\n")
+	fmt.Print("Starting day 17\n")
 	input := "udskfozm"
 	part1 := LongestPathfind(input)
 	fmt.Printf("Part 1: %v\n", part1)

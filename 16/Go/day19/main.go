@@ -76,7 +76,7 @@ func FrontalWhiteElephant(n int) int {
 }
 
 func main() {
-	fmt.Print("Starting day 15\n")
+	fmt.Print("Starting day 19\n")
 	part1 := WhiteElephant(3014603)
 	fmt.Printf("Part 1: %v\n", part1)
 	part2 := FrontalWhiteElephant(3014603)

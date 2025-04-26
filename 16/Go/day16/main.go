@@ -59,7 +59,7 @@ func Dragon(input string, size int) string {
 }
 
 func main() {
-	fmt.Print("Starting day 15\n")
+	fmt.Print("Starting day 16\n")
 	input := "11101000110010100"
 	part1 := Dragon(input, 272)
 	fmt.Printf("Part1: %v\n", part1)
