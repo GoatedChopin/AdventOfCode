@@ -1,7 +1,7 @@
 package main
 
 import (
-	"container/list"
+	"container/heap"
 	"fmt"
 	"strconv"
 	"strings"
@@ -9,9 +9,8 @@ import (
 	adv "github.com/GoatedChopin/AdventOfCode/16/Go/util"
 )
 
+// Node represents each cell
 type Node struct {
-	x    int
-	y    int
 	size int
 	used int
 }
@@ -24,166 +23,146 @@ func (n *Node) Empty() bool {
 	return n.used == 0
 }
 
-func (a *Node) Less(b *Node) bool {
-	if a.y < b.y {
-		return true
-	}
-	if a.y == b.y && a.x < b.x {
-		return true
-	}
-	return false
+// Grid: map of (x,y) → Node
+type Grid map[[2]int]Node
+
+// State: where the goal is, where the empty is, how many steps
+type State struct {
+	goalX, goalY   int
+	emptyX, emptyY int
+	steps          int
+	priority       int // f = g + h
 }
 
-func (a *Node) Adjacent(b *Node) bool {
-	xdiff := a.x - b.x
-	if xdiff < 0 {
-		xdiff = -xdiff
-	}
-	ydiff := a.y - b.y
-	if ydiff < 0 {
-		ydiff = -ydiff
-	}
-	if xdiff+ydiff == 1 {
-		return true
-	}
-	return false
+// PriorityQueue for A*
+type PriorityQueue []*State
+
+func (pq PriorityQueue) Len() int            { return len(pq) }
+func (pq PriorityQueue) Less(i, j int) bool  { return pq[i].priority < pq[j].priority }
+func (pq PriorityQueue) Swap(i, j int)       { pq[i], pq[j] = pq[j], pq[i] }
+func (pq *PriorityQueue) Push(x interface{}) { *pq = append(*pq, x.(*State)) }
+func (pq *PriorityQueue) Pop() interface{} {
+	old := *pq
+	n := len(old)
+	item := old[n-1]
+	*pq = old[0 : n-1]
+	return item
 }
 
-func ParseNodes(lines []string) []Node {
-	nodes := make([]Node, len(lines)-2)
+// Heuristic: how far goal is from (0,0)
+func (s *State) Heuristic() int {
+	return s.goalX + s.goalY
+}
+
+// Hash: uniquely identifies a state
+func (s *State) Hash() string {
+	return fmt.Sprintf("%d,%d-%d,%d", s.goalX, s.goalY, s.emptyX, s.emptyY)
+}
+
+// Parse input
+func ParseNodes(lines []string) (Grid, int, int, int, int) {
+	grid := make(Grid)
+	var emptyX, emptyY int
+	var maxX, maxY int
 	for _, line := range lines[2:] {
-		parts := strings.Split(line, " ")
-		parts[0] = strings.ReplaceAll(parts[0], "x", "")
-		parts[0] = strings.ReplaceAll(parts[0], "y", "")
-		parts[1] = strings.ReplaceAll(parts[1], "T", "")
-		parts[2] = strings.ReplaceAll(parts[2], "T", "")
-
-		xyparts := strings.Split(parts[0], "-")
-		x, err := strconv.Atoi(xyparts[1])
-		if err != nil {
-			panic("bad x val")
-		}
-		y, err := strconv.Atoi(xyparts[2])
-		if err != nil {
-			panic("bad y val")
-		}
-
-		size, err := strconv.Atoi(parts[1])
-		if err != nil {
-			panic("bad size val")
-		}
-		used, err := strconv.Atoi(parts[2])
-		if err != nil {
-			panic("bad used val")
-		}
-		nodes = append(nodes, Node{x, y, size, used})
-	}
-	return nodes
-}
-
-func ViablePairs(nodes []Node) int {
-	pairs := 0
-	for c := range adv.FixedLengthCombinations(len(nodes), 2, false, 2) {
-		a, b := c[0], c[1]
-		if a == b {
+		parts := strings.Fields(line)
+		if len(parts) < 4 {
 			continue
 		}
-		if !nodes[b].Empty() && nodes[a].Avail() > nodes[b].used {
-			pairs++
-		} else if !nodes[a].Empty() && nodes[b].Avail() > nodes[a].used {
-			pairs++
+		name := parts[0]
+		size, _ := strconv.Atoi(strings.TrimSuffix(parts[1], "T"))
+		used, _ := strconv.Atoi(strings.TrimSuffix(parts[2], "T"))
+
+		name = strings.ReplaceAll(name, "x", "")
+		name = strings.ReplaceAll(name, "y", "")
+		coords := strings.Split(name, "-")
+
+		x, _ := strconv.Atoi(coords[1])
+		y, _ := strconv.Atoi(coords[2])
+
+		if used == 0 {
+			emptyX, emptyY = x, y
+		}
+		grid[[2]int{x, y}] = Node{size, used}
+
+		if x > maxX {
+			maxX = x
+		}
+		if y > maxY {
+			maxY = y
 		}
 	}
-	return pairs
+	return grid, emptyX, emptyY, maxX, maxY
 }
 
-func GenViablePairs(nodes []Node) <-chan []int {
-	ch := make(chan []int)
-	go func(ch chan []int) {
-		defer close(ch)
-		for c := range adv.FixedLengthCombinations(len(nodes), 2, false, 2) {
-			a, b := c[0], c[1]
-			if a == b {
-				continue
-			}
-			if !nodes[a].Adjacent(&nodes[b]) {
-				continue
-			}
-			if !nodes[b].Empty() && nodes[a].Avail() > nodes[b].used {
-				ch <- c
-			} else if !nodes[a].Empty() && nodes[b].Avail() > nodes[a].used {
-				ch <- c
-			}
+// Generate moves from the current empty spot
+func GenMoves(grid Grid, emptyX, emptyY int) [][2]int {
+	moves := make([][2]int, 0, 4)
+	dirs := [][2]int{{0, 1}, {1, 0}, {0, -1}, {-1, 0}} // Down, Right, Up, Left
+	empty := grid[[2]int{emptyX, emptyY}]
+	for _, d := range dirs {
+		nx, ny := emptyX+d[0], emptyY+d[1]
+		neighbor, ok := grid[[2]int{nx, ny}]
+		if !ok {
+			continue
 		}
-	}(ch)
-	return ch
-}
-
-type State struct {
-	ogX, ogY, steps int
-	nodes           []Node
-}
-
-func (s *State) Hash() string {
-	var b strings.Builder
-	for _, n := range s.nodes {
-		b.WriteString(fmt.Sprintf("|%d,%d,%d", n.x, n.y, n.used))
-	}
-	return b.String()
-}
-
-func MinMoves(nodes []Node) int {
-	targetX, targetY := 0, 0
-	for _, n := range nodes {
-		if n.x > targetX {
-			targetX = n.x
+		if empty.size >= neighbor.used {
+			moves = append(moves, [2]int{nx, ny})
 		}
 	}
+	return moves
+}
+
+// Main A* solver
+func MinMoves(grid Grid, emptyX, emptyY, maxX, maxY int) int {
+	initial := &State{goalX: maxX, goalY: 0, emptyX: emptyX, emptyY: emptyY, steps: 0}
+	initial.priority = initial.steps + initial.Heuristic()
+
 	visited := make(map[string]bool)
-	queue := list.New()
-	queue.PushBack(State{targetX, targetY, 0, nodes})
-	for queue.Len() > 0 {
-		state := queue.Remove(queue.Front()).(State)
-		if state.ogX == 0 && state.ogY == 0 {
-			return state.steps
+	pq := make(PriorityQueue, 0)
+	heap.Init(&pq)
+	heap.Push(&pq, initial)
+
+	for pq.Len() > 0 {
+		current := heap.Pop(&pq).(*State)
+		h := current.Hash()
+		if visited[h] {
+			continue
 		}
-		for pair := range GenViablePairs(state.nodes) {
-			a, b := state.nodes[pair[0]], state.nodes[pair[1]]
-			ogX, ogY := state.ogX, state.ogY
-			newNodes := make([]Node, len(nodes))
-			copy(newNodes, state.nodes)
-			if a.Avail() >= b.used {
-				newNodes[pair[0]] = Node{a.x, a.y, a.size, a.used + b.used}
-				newNodes[pair[1]] = Node{b.x, b.y, b.size, 0}
-				if b.x == ogX && b.y == ogY {
-					ogX, ogY = a.x, a.y
-				}
-			} else {
-				newNodes[pair[1]] = Node{b.x, b.y, b.size, a.used + b.used}
-				newNodes[pair[0]] = Node{a.x, a.y, a.size, 0}
-				if a.x == ogX && a.y == ogY {
-					ogX, ogY = b.x, b.y
-				}
+		visited[h] = true
+
+		// Goal reached
+		if current.goalX == 0 && current.goalY == 0 {
+			return current.steps
+		}
+
+		for _, move := range GenMoves(grid, current.emptyX, current.emptyY) {
+			nx, ny := move[0], move[1]
+
+			newGoalX, newGoalY := current.goalX, current.goalY
+			// If moving the empty under the goal, the goal moves
+			if nx == current.goalX && ny == current.goalY {
+				newGoalX, newGoalY = current.emptyX, current.emptyY
 			}
-			newState := State{ogX, ogY, state.steps + 1, newNodes}
-			h := newState.Hash()
-			if !visited[h] {
-				visited[h] = true
-			} else {
-				continue
+
+			newState := &State{
+				goalX: newGoalX, goalY: newGoalY,
+				emptyX: nx, emptyY: ny,
+				steps: current.steps + 1,
 			}
-			queue.PushBack(newState)
+			newState.priority = newState.steps + newState.Heuristic()
+
+			heap.Push(&pq, newState)
 		}
 	}
 	return -1
 }
 
 func main() {
-	fmt.Print("Starting day 12\n")
+	fmt.Print("Starting day 22\n")
 	inputs := adv.GetInput("22", true, "\n", true)
-	nodes := ParseNodes(inputs)
-	part1 := ViablePairs(nodes)
-	fmt.Printf("Part 1: %v\n", part1)
-	part2 := MinMoves(nodes)
+	grid, emptyX, emptyY, maxX, maxY := ParseNodes(inputs)
+
+	part2 := MinMoves(grid, emptyX, emptyY, maxX, maxY)
 	fmt.Printf("Part 2: %v\n", part2)
 }
