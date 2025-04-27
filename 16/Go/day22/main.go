@@ -49,28 +49,6 @@ func (a *Node) Adjacent(b *Node) bool {
 	return false
 }
 
-type NodeSlice []Node
-
-// Less implements sort.Interface.
-func (n NodeSlice) Less(i int, j int) bool {
-	if n[i].y < n[j].y {
-		return true
-	}
-	if n[i].y == n[j].y && n[i].x < n[j].x {
-		return true
-	}
-	return false
-}
-
-// Swap implements sort.Interface.
-func (n NodeSlice) Swap(i int, j int) {
-	n[i], n[j] = n[j], n[i]
-}
-
-func (n NodeSlice) Len() int {
-	return len(n)
-}
-
 func ParseNodes(lines []string) []Node {
 	nodes := make([]Node, len(lines)-2)
 	for _, line := range lines[2:] {
@@ -141,71 +119,6 @@ func GenViablePairs(nodes []Node) <-chan []int {
 	return ch
 }
 
-type SmallNode struct {
-	size int
-	used int
-}
-
-func (n *SmallNode) Avail() int {
-	return n.size - n.used
-}
-
-func (n *SmallNode) Empty() bool {
-	return n.used == 0
-}
-
-type StateDeprecated struct {
-	steps int
-	ogX   int
-	ogY   int
-	grid  [][]SmallNode
-}
-
-func NodeGrid(nodes NodeSlice) [][]SmallNode {
-	// Implement BFS or A* to find shortest path moving df entries to adjacent nodes.
-	// Probably need to put this in a grid or a hashmap so we can do fast lookups based on x and y
-	xMax, yMax := 0, 0
-	for _, n := range nodes {
-		if n.x > xMax {
-			xMax = n.x
-		}
-		if n.y > yMax {
-			yMax = n.y
-		}
-	}
-	// sort.Sort(nodes)
-	m := make([][]SmallNode, yMax+1)
-	for y := range yMax {
-		m[y] = make([]SmallNode, xMax+1)
-	}
-	for _, n := range nodes {
-		m[n.y][n.x] = SmallNode{n.size, n.used}
-	}
-	return m
-}
-
-func MinMovesDeprecated(grid [][]SmallNode) int {
-	// queue := list.New()
-	// queue.PushBack(State{0, len(grid[0]) - 1, 0, })
-	// for queue.Len() > 0 {
-	// 	state := queue.Remove(queue.Front()).(State)
-	// 	if state.ogX == 0 && state.ogY == 0 {
-	// 		return state.steps
-	// 	}
-	// 	for yc := range adv.FixedLengthCombinations(len(grid), 2, false, 2) {
-	// 		if yc[1]-yc[0] == 1 {
-
-	// 		}
-	// 	}
-	// 	for xc := range adv.FixedLengthCombinations(len(grid[0]), 2, false, 2) {
-	// 		if xc[1]-xc[0] == 1 {
-
-	// 		}
-	// 	}
-	// }
-	return -1
-}
-
 type State struct {
 	ogX, ogY, steps int
 	nodes           []Node
@@ -214,7 +127,7 @@ type State struct {
 func (s *State) Hash() string {
 	var b strings.Builder
 	for _, n := range s.nodes {
-		b.Write([]byte{byte('|'), byte(n.x), ',', byte(n.y), ',', byte(n.used)})
+		b.WriteString(fmt.Sprintf("|%d,%d,%d", n.x, n.y, n.used))
 	}
 	return b.String()
 }
@@ -238,7 +151,7 @@ func MinMoves(nodes []Node) int {
 			a, b := state.nodes[pair[0]], state.nodes[pair[1]]
 			ogX, ogY := state.ogX, state.ogY
 			newNodes := make([]Node, len(nodes))
-			copy(newNodes, nodes)
+			copy(newNodes, state.nodes)
 			if a.Avail() >= b.used {
 				newNodes[pair[0]] = Node{a.x, a.y, a.size, a.used + b.used}
 				newNodes[pair[1]] = Node{b.x, b.y, b.size, 0}
