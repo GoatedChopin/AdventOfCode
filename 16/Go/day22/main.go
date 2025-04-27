@@ -1,112 +1,13 @@
 package main
 
 import (
+	"container/list"
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
 
 	adv "github.com/GoatedChopin/AdventOfCode/16/Go/util"
 )
-
-type IpRange struct {
-	lower int
-	upper int
-}
-
-type IpRangeArray []IpRange
-
-func (u IpRangeArray) Len() int {
-	return len(u)
-}
-
-func (u IpRangeArray) Swap(i, j int) {
-	u[i], u[j] = u[j], u[i]
-}
-
-func (u IpRangeArray) Less(i, j int) bool {
-	return u[i].lower < u[j].lower
-}
-
-func ParseRange(s string) IpRange {
-	parts := strings.Split(s, "-")
-	lower, err := strconv.Atoi(parts[0])
-	if err != nil {
-		panic("Bad lower")
-	}
-	upper, err := strconv.Atoi(parts[1])
-	if err != nil {
-		panic("Bad upper")
-	}
-	return IpRange{lower, upper}
-}
-
-func LowestAllowedIp(lines []string) int {
-	ipRanges := make(IpRangeArray, len(lines))
-	for i, s := range lines {
-		ipRanges[i] = ParseRange(s)
-	}
-	sort.Sort(ipRanges)
-	i := 0
-	r := 0
-	for {
-		if r < len(ipRanges) && (ipRanges[r].lower <= i && i <= ipRanges[r].upper) {
-			i = ipRanges[r].upper + 1
-		} else {
-			if r < len(ipRanges)-1 && !(i >= ipRanges[r+1].lower && i <= ipRanges[r+1].upper) {
-				return i
-			}
-		}
-		for r < len(ipRanges) && i > ipRanges[r].upper {
-			r++
-		}
-	}
-}
-
-func AllAllowedIps(lines []string) int {
-	ipRanges := make(IpRangeArray, len(lines))
-	for i, s := range lines {
-		ipRanges[i] = ParseRange(s)
-	}
-	sort.Sort(ipRanges)
-
-	var mergedRanges []IpRange
-	current := ipRanges[0]
-
-	for i := 1; i < len(ipRanges); i++ {
-		next := ipRanges[i]
-		if next.lower <= current.upper+1 {
-			// Merge ranges
-			if next.upper > current.upper {
-				current.upper = next.upper
-			}
-		} else {
-			// No overlap, push current and move on
-			mergedRanges = append(mergedRanges, current)
-			current = next
-		}
-	}
-	mergedRanges = append(mergedRanges, current)
-
-	// Count allowed IPs
-	allowed := 0
-	prevUpper := -1
-	for _, r := range mergedRanges {
-		if r.lower > prevUpper+1 {
-			allowed += r.lower - (prevUpper + 1)
-		}
-		if r.upper > prevUpper {
-			prevUpper = r.upper
-		}
-	}
-	// Final range to 2^32-1
-	const maxIp = 4294967295
-	if prevUpper < maxIp {
-		allowed += maxIp - prevUpper
-	}
-
-	return allowed
-}
 
 type Node struct {
 	x    int
@@ -121,6 +22,53 @@ func (n *Node) Avail() int {
 
 func (n *Node) Empty() bool {
 	return n.used == 0
+}
+
+func (a *Node) Less(b *Node) bool {
+	if a.y < b.y {
+		return true
+	}
+	if a.y == b.y && a.x < b.x {
+		return true
+	}
+	return false
+}
+
+func (a *Node) Adjacent(b *Node) bool {
+	xdiff := a.x - b.x
+	if xdiff < 0 {
+		xdiff = -xdiff
+	}
+	ydiff := a.y - b.y
+	if ydiff < 0 {
+		ydiff = -ydiff
+	}
+	if xdiff+ydiff == 1 {
+		return true
+	}
+	return false
+}
+
+type NodeSlice []Node
+
+// Less implements sort.Interface.
+func (n NodeSlice) Less(i int, j int) bool {
+	if n[i].y < n[j].y {
+		return true
+	}
+	if n[i].y == n[j].y && n[i].x < n[j].x {
+		return true
+	}
+	return false
+}
+
+// Swap implements sort.Interface.
+func (n NodeSlice) Swap(i int, j int) {
+	n[i], n[j] = n[j], n[i]
+}
+
+func (n NodeSlice) Len() int {
+	return len(n)
 }
 
 func ParseNodes(lines []string) []Node {
@@ -171,11 +119,150 @@ func ViablePairs(nodes []Node) int {
 	return pairs
 }
 
-func MinMoves(nodes []Node) int {
+func GenViablePairs(nodes []Node) <-chan []int {
+	ch := make(chan []int)
+	go func(ch chan []int) {
+		defer close(ch)
+		for c := range adv.FixedLengthCombinations(len(nodes), 2, false, 2) {
+			a, b := c[0], c[1]
+			if a == b {
+				continue
+			}
+			if !nodes[a].Adjacent(&nodes[b]) {
+				continue
+			}
+			if !nodes[b].Empty() && nodes[a].Avail() > nodes[b].used {
+				ch <- c
+			} else if !nodes[a].Empty() && nodes[b].Avail() > nodes[a].used {
+				ch <- c
+			}
+		}
+	}(ch)
+	return ch
+}
+
+type SmallNode struct {
+	size int
+	used int
+}
+
+func (n *SmallNode) Avail() int {
+	return n.size - n.used
+}
+
+func (n *SmallNode) Empty() bool {
+	return n.used == 0
+}
+
+type StateDeprecated struct {
+	steps int
+	ogX   int
+	ogY   int
+	grid  [][]SmallNode
+}
+
+func NodeGrid(nodes NodeSlice) [][]SmallNode {
 	// Implement BFS or A* to find shortest path moving df entries to adjacent nodes.
 	// Probably need to put this in a grid or a hashmap so we can do fast lookups based on x and y
+	xMax, yMax := 0, 0
+	for _, n := range nodes {
+		if n.x > xMax {
+			xMax = n.x
+		}
+		if n.y > yMax {
+			yMax = n.y
+		}
+	}
+	// sort.Sort(nodes)
+	m := make([][]SmallNode, yMax+1)
+	for y := range yMax {
+		m[y] = make([]SmallNode, xMax+1)
+	}
+	for _, n := range nodes {
+		m[n.y][n.x] = SmallNode{n.size, n.used}
+	}
+	return m
+}
 
-	return 0
+func MinMovesDeprecated(grid [][]SmallNode) int {
+	// queue := list.New()
+	// queue.PushBack(State{0, len(grid[0]) - 1, 0, })
+	// for queue.Len() > 0 {
+	// 	state := queue.Remove(queue.Front()).(State)
+	// 	if state.ogX == 0 && state.ogY == 0 {
+	// 		return state.steps
+	// 	}
+	// 	for yc := range adv.FixedLengthCombinations(len(grid), 2, false, 2) {
+	// 		if yc[1]-yc[0] == 1 {
+
+	// 		}
+	// 	}
+	// 	for xc := range adv.FixedLengthCombinations(len(grid[0]), 2, false, 2) {
+	// 		if xc[1]-xc[0] == 1 {
+
+	// 		}
+	// 	}
+	// }
+	return -1
+}
+
+type State struct {
+	ogX, ogY, steps int
+	nodes           []Node
+}
+
+func (s *State) Hash() string {
+	var b strings.Builder
+	for _, n := range s.nodes {
+		b.Write([]byte{byte('|'), byte(n.x), ',', byte(n.y), ',', byte(n.used)})
+	}
+	return b.String()
+}
+
+func MinMoves(nodes []Node) int {
+	targetX, targetY := 0, 0
+	for _, n := range nodes {
+		if n.x > targetX {
+			targetX = n.x
+		}
+	}
+	visited := make(map[string]bool)
+	queue := list.New()
+	queue.PushBack(State{targetX, targetY, 0, nodes})
+	for queue.Len() > 0 {
+		state := queue.Remove(queue.Front()).(State)
+		if state.ogX == 0 && state.ogY == 0 {
+			return state.steps
+		}
+		for pair := range GenViablePairs(state.nodes) {
+			a, b := state.nodes[pair[0]], state.nodes[pair[1]]
+			ogX, ogY := state.ogX, state.ogY
+			newNodes := make([]Node, len(nodes))
+			copy(newNodes, nodes)
+			if a.Avail() >= b.used {
+				newNodes[pair[0]] = Node{a.x, a.y, a.size, a.used + b.used}
+				newNodes[pair[1]] = Node{b.x, b.y, b.size, 0}
+				if b.x == ogX && b.y == ogY {
+					ogX, ogY = a.x, a.y
+				}
+			} else {
+				newNodes[pair[1]] = Node{b.x, b.y, b.size, a.used + b.used}
+				newNodes[pair[0]] = Node{a.x, a.y, a.size, 0}
+				if a.x == ogX && a.y == ogY {
+					ogX, ogY = b.x, b.y
+				}
+			}
+			newState := State{ogX, ogY, state.steps + 1, newNodes}
+			h := newState.Hash()
+			if !visited[h] {
+				visited[h] = true
+			} else {
+				continue
+			}
+			queue.PushBack(newState)
+		}
+	}
+	return -1
 }
 
 func main() {
@@ -184,4 +271,6 @@ func main() {
 	nodes := ParseNodes(inputs)
 	part1 := ViablePairs(nodes)
 	fmt.Printf("Part 1: %v\n", part1)
+	part2 := MinMoves(nodes)
+	fmt.Printf("Part 2: %v\n", part2)
 }

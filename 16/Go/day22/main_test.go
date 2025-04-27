@@ -2,8 +2,6 @@ package main
 
 import (
 	"testing"
-
-	adv "github.com/GoatedChopin/AdventOfCode/16/Go/util"
 )
 
 func Test_dayFourteen00(t *testing.T) {
@@ -18,7 +16,7 @@ func Test_dayFourteen00(t *testing.T) {
 	// 	}
 	// })
 	t.Run("All IPs", func(t *testing.T) {
-		if got := AllAllowedIps(adv.GetInput("20", true, "\n", true)); got != 3 {
+		if got := MinMoves([]Node{}); got != 3 {
 			t.Errorf("%v = %v, want %v", "5", got, 3)
 		}
 	})
