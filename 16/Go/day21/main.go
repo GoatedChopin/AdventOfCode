@@ -9,31 +9,40 @@ import (
 	adv "github.com/GoatedChopin/AdventOfCode/16/Go/util"
 )
 
-func Init(r *map[string]int) {
-	(*r)["a"] = 0
-	(*r)["b"] = 0
-	(*r)["c"] = 0
-	(*r)["d"] = 0
-}
-
-func getOrLookup(s string, r *map[string]int) int {
-	v, ok := (*r)[s]
-	if ok {
-		return v
-	}
-	c, err := strconv.Atoi(s)
-	if err != nil {
-		panic("BAD VAL AT getOrLookup")
-	}
-	return c
-}
-
 func getInt(s string) int {
 	i, err := strconv.Atoi(s)
 	if err != nil {
 		panic("BAD INT VAL")
 	}
 	return i
+}
+
+func Rotate(s *[]string, i int) {
+	for i > len(*s) {
+		i -= len(*s)
+	}
+	if i == 0 {
+		return
+	} else if i > 0 {
+		ns := make([]string, len(*s))
+		for si := range i {
+			ns[si] = (*s)[(len(*s) - i + si)]
+		}
+		for si := range len(*s) - i {
+			ns[i+si] = (*s)[si]
+		}
+		copy(*s, ns)
+	} else {
+		i = -i
+		ns := make([]string, len(*s))
+		for si := range len(*s) - i {
+			ns[si] = (*s)[i+si]
+		}
+		for si := range i {
+			ns[len(*s)-i+si] = (*s)[si]
+		}
+		copy(*s, ns)
+	}
 }
 
 func Execute(instruction []string, r *[]string) {
@@ -72,17 +81,21 @@ func Execute(instruction []string, r *[]string) {
 		}
 		slices.Reverse((*r)[a:b])
 	case "rotate":
-		a, b := instruction[1], instruction[2]
-		v1, ok1 := (*r)[a]
-		_, ok2 := (*r)[b]
-		if ok1 && ok2 {
-			(*r)[b] = v1
-		} else if ok2 {
-			value, err := strconv.Atoi(a)
-			if err != nil {
-				panic("BAD INT VALUE AT cpy")
+		if instruction[1] == "based" {
+			char := instruction[6]
+			ind := 0
+			for i, c := range *r {
+				if c == char {
+					ind = i
+				}
 			}
-			(*r)[b] = value
+			Rotate(r, ind)
+		} else {
+			dir, amount := instruction[1], getInt(instruction[2])
+			if dir == "left" {
+				amount = -amount
+			}
+			Rotate(r, amount)
 		}
 	default:
 		return
@@ -98,7 +111,7 @@ func Follow(splitInstructions [][]string, s string) string {
 		Execute(args, &r)
 		i++
 	}
-	return string(r)
+	return strings.Join(r, "")
 }
 
 func Scramble(instructions []string, input string) string {

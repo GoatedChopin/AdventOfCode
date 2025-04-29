@@ -1,31 +1,29 @@
 package main
 
 import (
-	"fmt"
 	"strings"
 	"testing"
-
-	adv "github.com/GoatedChopin/AdventOfCode/16/Go/util"
 )
 
 func Test(t *testing.T) {
-	t.Run("FindPath", func(t *testing.T) {
-		instructions := adv.GetInput("25", true, "\n", true)
-		splitInstructions := make([][]string, len(instructions))
-		for i, s := range instructions {
-			args := strings.Split(s, " ")
-			splitInstructions[i] = args
+	t.Run("Rotate", func(t *testing.T) {
+
+		s := strings.Split("abcd", "")
+		Rotate(&s, 1)
+		if strings.Join(s, "") != "dabc" {
+			t.Errorf("%v = %v, want %v", "FindPath", strings.Join(s, ""), "dabc")
 		}
-		els := 0
-		for i := range Follow(0, splitInstructions) {
-			fmt.Printf("%v, ", i)
-			els++
-			if els >= 20 {
-				break
-			}
+		Rotate(&s, -1)
+		if strings.Join(s, "") != "abcd" {
+			t.Errorf("%v = %v, want %v", "FindPath", strings.Join(s, ""), "abcd")
 		}
-		// if got := AlternatingSignal(); got != 14 {
-		// 	t.Errorf("%v = %v, want %v", "FindPath", got, 14)
-		// }
+		Rotate(&s, 2)
+		if strings.Join(s, "") != "cdab" {
+			t.Errorf("%v = %v, want %v", "FindPath", strings.Join(s, ""), "cdab")
+		}
+		Rotate(&s, -2)
+		if strings.Join(s, "") != "abcd" {
+			t.Errorf("%v = %v, want %v", "FindPath", strings.Join(s, ""), "abcd")
+		}
 	})
 }
