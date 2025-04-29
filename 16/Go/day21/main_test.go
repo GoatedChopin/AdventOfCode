@@ -50,5 +50,15 @@ func Test(t *testing.T) {
 		if strings.Join(s, "") != "adbc" {
 			t.Errorf("%v = %v, want %v", i[0], strings.Join(s, ""), "adbc")
 		}
+		i = strings.Split("move position 1 to position 2", " ")
+		Execute(i, &s)
+		if strings.Join(s, "") != "abdc" {
+			t.Errorf("%v = %v, want %v", i[0], strings.Join(s, ""), "abdc")
+		}
+		i = strings.Split("move position 3 to position 0", " ")
+		Execute(i, &s)
+		if strings.Join(s, "") != "cabd" {
+			t.Errorf("%v = %v, want %v", i[0], strings.Join(s, ""), "cabd")
+		}
 	})
 }

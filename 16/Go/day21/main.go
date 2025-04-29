@@ -70,16 +70,30 @@ func Execute(instruction []string, r *[]string) {
 		}
 	case "move":
 		a, b := getInt(instruction[2]), getInt(instruction[5])
-		if b < a {
-			a, b = b, a
-		}
-		aval, bval := (*r)[a], (*r)[b]
+		aval := (*r)[a]
 		nr := make([]string, len(*r))
 		i := 0
 		ni := 0
-		for i < len(*r) {
-
+		skipped := false
+		for i < len(*r) && ni < len(nr) {
+			if i == a && !skipped {
+				i++
+				skipped = true
+				continue
+			} else if ni == b {
+				nr[ni] = aval
+				ni++
+				continue
+			}
+			nr[ni] = (*r)[i]
+			i++
+			ni++
 		}
+		if nr[len(nr)-1] == "" {
+			nr[len(nr)-1] = (*r)[len(nr)-1]
+		}
+		nr[b] = aval
+		copy(*r, nr)
 	case "reverse":
 		a, b := getInt(instruction[2]), getInt(instruction[4])
 		if b < a {
@@ -95,7 +109,11 @@ func Execute(instruction []string, r *[]string) {
 					ind = i
 				}
 			}
-			Rotate(r, ind)
+			steps := 1 + ind
+			if ind >= 4 {
+				steps++
+			}
+			Rotate(r, steps)
 		} else {
 			dir, amount := instruction[1], getInt(instruction[2])
 			if dir == "left" {
