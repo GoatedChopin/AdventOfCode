@@ -59,6 +59,7 @@ func Execute(instruction []string, r *[]string) {
 				}
 				if ai != -1 && bi != -1 {
 					(*r)[ai], (*r)[bi] = (*r)[bi], (*r)[ai]
+					return
 				}
 			}
 		} else if instruction[1] == "position" {
@@ -72,14 +73,19 @@ func Execute(instruction []string, r *[]string) {
 		if b < a {
 			a, b = b, a
 		}
-		aval := (*r)[a]
-		*r = slices.Concat((*r)[:a], (*r)[a+1:b], []string{aval}, (*r)[b+1:])
+		aval, bval := (*r)[a], (*r)[b]
+		nr := make([]string, len(*r))
+		i := 0
+		ni := 0
+		for i < len(*r) {
+
+		}
 	case "reverse":
 		a, b := getInt(instruction[2]), getInt(instruction[4])
 		if b < a {
 			a, b = b, a
 		}
-		slices.Reverse((*r)[a:b])
+		slices.Reverse((*r)[a : b+1])
 	case "rotate":
 		if instruction[1] == "based" {
 			char := instruction[6]
