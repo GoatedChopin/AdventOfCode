@@ -1,11 +1,20 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"testing"
+
+	adv "github.com/GoatedChopin/AdventOfCode/16/Go/util"
 )
 
 func Test(t *testing.T) {
+	t.Run("Rotate", func(t *testing.T) {
+
+		inputs := adv.GetInput("21", true, "\n", true)
+		part2 := Unscramble(inputs, "fbgdceah")
+		fmt.Printf("Part 2: %v\n", part2)
+	})
 	t.Run("Rotate", func(t *testing.T) {
 
 		s := strings.Split("abcd", "")
