@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -14,162 +13,139 @@ type Robot struct {
 	hasLow, hasHigh bool
 }
 
-func (r *Robot) Pop(s string) (int, error) {
-	if s == "low" {
-		if r.hasLow {
-			val := r.low
-			r.low = -1
-			r.hasLow = false
-			return val, nil
-		}
-		return -1, errors.New("robot does not have low val")
-	}
-	if s == "high" {
-		if r.hasHigh {
-			val := r.high
-			r.high = -1
-			r.hasHigh = false
-			return val, nil
-		}
-		return -1, errors.New("robot does not have high val")
-	}
-	return -1, errors.New("must pass in low or high for s")
-}
-
-func (r *Robot) Push(i int) (int, error) {
-	if (*r).hasLow && (*r).hasHigh {
-		(*r).hasLow, (*r).hasHigh = true, true
-		if i < (*r).low {
-			out := (*r).high
-			(*r).high = (*r).low
-			(*r).low = i
-			return out, nil
-		} else if i > (*r).high {
-			out := (*r).low
-			(*r).low = (*r).high
-			(*r).high = i
-			return out, nil
-		}
-	} else if (*r).hasLow {
-		(*r).hasLow, (*r).hasHigh = true, true
-		if i < (*r).low {
-			out := -1
-			(*r).high = (*r).low
-			(*r).low = i
-			return out, nil
+func (r *Robot) Push(i int) {
+	if !r.hasLow && !r.hasHigh {
+		r.low = i
+		r.hasLow = true
+	} else if r.hasLow && !r.hasHigh {
+		if i < r.low {
+			r.high = r.low
+			r.low = i
 		} else {
-			out := -1
-			(*r).high = i
-			return out, nil
+			r.high = i
 		}
-	} else if (*r).hasHigh {
-		(*r).hasLow, (*r).hasHigh = true, true
-		if i > (*r).high {
-			out := -1
-			(*r).low = (*r).high
-			(*r).high = i
-			return out, nil
-		} else {
-			out := -1
-			(*r).low = i
-			return out, nil
-		}
+		r.hasHigh = true
 	} else {
-		(*r).low = i
-		(*r).hasLow = true
-		return -1, nil
+		panic("Push called when bot already has two values")
 	}
-	return -1, nil
 }
 
-func MakeRobots(lines []string) []Robot {
-	maxRobots := 1
-	for _, line := range lines {
-		splitLine := strings.Split(line, " ")
-		if splitLine[0] == "bot" {
-			botIndex, err := strconv.Atoi(splitLine[1])
-			if err != nil {
-				panic("bad botIndex")
-			}
-			if botIndex > maxRobots {
-				maxRobots = botIndex
-			}
-		}
-	}
-	robots := make([]Robot, maxRobots+1)
-	for _, line := range lines {
-		splitLine := strings.Split(line, " ")
-		if splitLine[0] == "bot" {
-			botIndex, err := strconv.Atoi(splitLine[1])
-			if err != nil {
-				panic("bad botIndex")
-			}
-			robots[botIndex] = Robot{}
-		}
-	}
-	return robots
+func (r *Robot) Pop() (int, int) {
+	low, high := r.low, r.high
+	r.hasLow, r.hasHigh = false, false
+	r.low, r.high = -1, -1
+	return low, high
 }
 
-func SimulateRobots(actions []string, robots []Robot, part int) int {
-	for {
-		for _, action := range actions {
-			splitLine := strings.Split(action, " ")
-			if splitLine[0] == "value" {
-				botIndex, err := strconv.Atoi(splitLine[5])
-				if err != nil {
-					panic("bad botIndex")
-				}
-				val, err := strconv.Atoi(splitLine[1])
-				if err != nil {
-					panic("bad val")
-				}
-				robots[botIndex].Push(val)
-				continue
-			}
-			if splitLine[2] == "gives" {
-				givingBot, err := strconv.Atoi(splitLine[1])
-				if err != nil {
-					panic("bad botIndex")
-				}
-				if !robots[givingBot].hasLow || !robots[givingBot].hasHigh {
-					continue
-				}
-				if part == 1 && robots[givingBot].low == 17 && robots[givingBot].high == 61 {
-					return givingBot
-				}
-				// low
-				lowVal, err := robots[givingBot].Pop("low")
-				if err != nil {
-					panic("bot doesn't have low")
-				}
-				if splitLine[5] == "bot" {
-					botIndex, _ := strconv.Atoi(splitLine[6])
-					robots[botIndex].Push(lowVal)
-				} else if splitLine[5] == "output" {
-					// handle output bin if needed for part 2
-				}
+type Instruction struct {
+	botID             int
+	lowType, highType string
+	lowID, highID     int
+}
 
-				// high
-				highVal, err := robots[givingBot].Pop("high")
-				if err != nil {
-					panic("bot doesn't have high")
-				}
-				if splitLine[10] == "bot" {
-					botIndex, _ := strconv.Atoi(splitLine[11])
-					robots[botIndex].Push(highVal)
-				} else if splitLine[10] == "output" {
-					// handle output bin if needed for part 2
-				}
+func mustAtoi(s string) int {
+	i, err := strconv.Atoi(s)
+	if err != nil {
+		panic(err)
+	}
+	return i
+}
+
+func SimulateRobots(lines []string, part int) int {
+	robots := make(map[int]*Robot)
+	outputs := make(map[int]int)
+	var valueInstructions []string
+	var actionQueue []Instruction
+
+	// Separate value and bot instructions
+	for _, line := range lines {
+		parts := strings.Fields(line)
+		if parts[0] == "value" {
+			valueInstructions = append(valueInstructions, line)
+		} else {
+			botID := mustAtoi(parts[1])
+			lowType := parts[5]
+			lowID := mustAtoi(parts[6])
+			highType := parts[10]
+			highID := mustAtoi(parts[11])
+			actionQueue = append(actionQueue, Instruction{botID, lowType, highType, lowID, highID})
+			if robots[botID] == nil {
+				robots[botID] = &Robot{}
 			}
 		}
 	}
+
+	// Apply initial value instructions
+	for _, line := range valueInstructions {
+		parts := strings.Fields(line)
+		val := mustAtoi(parts[1])
+		botID := mustAtoi(parts[5])
+		if robots[botID] == nil {
+			robots[botID] = &Robot{}
+		}
+		robots[botID].Push(val)
+	}
+
+	// Process action queue
+	progress := true
+	for progress {
+		progress = false
+		newQueue := []Instruction{}
+		for _, instr := range actionQueue {
+			bot := robots[instr.botID]
+			if bot.hasLow && bot.hasHigh {
+				low, high := bot.Pop()
+
+				if part == 1 && ((low == 17 && high == 61) || (low == 61 && high == 17)) {
+					return instr.botID
+				}
+
+				if part == 2 {
+					b0, ok := outputs[0]
+					if ok {
+						b1, ok := outputs[1]
+						if ok {
+							b2, ok := outputs[2]
+							if ok {
+								return b0 * b1 * b2
+							}
+						}
+					}
+				}
+
+				if instr.lowType == "bot" {
+					if robots[instr.lowID] == nil {
+						robots[instr.lowID] = &Robot{}
+					}
+					robots[instr.lowID].Push(low)
+				} else {
+					outputs[instr.lowID] = low
+				}
+
+				if instr.highType == "bot" {
+					if robots[instr.highID] == nil {
+						robots[instr.highID] = &Robot{}
+					}
+					robots[instr.highID].Push(high)
+				} else {
+					outputs[instr.highID] = high
+				}
+				progress = true
+			} else {
+				newQueue = append(newQueue, instr)
+			}
+		}
+		actionQueue = newQueue
+	}
+
 	return -1
 }
 
 func main() {
-	fmt.Printf("Starting day 10\n")
-	inputs := adv.GetInput("10", true, "\n", true)
-	robots := MakeRobots(inputs)
-	part1 := SimulateRobots(inputs, robots, 1)
-	fmt.Printf("%v\n", part1)
+	fmt.Println("Starting day 10")
+	lines := adv.GetInput("10", true, "\n", true)
+	result := SimulateRobots(lines, 1)
+	fmt.Printf("Part 1 result: %d\n", result)
+	part2 := SimulateRobots(inputs, 2)
+	fmt.Printf("Part 2 result: %v\n", part2)
 }
