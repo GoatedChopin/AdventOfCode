@@ -146,6 +146,6 @@ func main() {
 	lines := adv.GetInput("10", true, "\n", true)
 	result := SimulateRobots(lines, 1)
 	fmt.Printf("Part 1 result: %d\n", result)
-	part2 := SimulateRobots(inputs, 2)
+	part2 := SimulateRobots(lines, 2)
 	fmt.Printf("Part 2 result: %v\n", part2)
 }
