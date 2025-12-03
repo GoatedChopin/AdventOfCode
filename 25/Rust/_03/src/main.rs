@@ -69,24 +69,18 @@ fn compute_value(input: &Vec<u64>) -> u64 {
 }
 
 fn best_n(input: &Vec<u64>, n: usize) -> u64 {
-    println!("Finding best {} in {:?}", n, input);
     let mut best = vec![0; n];
 
     let mut current = Vec::new();
     for i in 0..n {
         current.push(input[i]);
     }
-    println!("Starting with: {:?}", current);
     for i in n..input.len() {
         for j in 0..n {
             let mut hypothetical = current.clone();
             hypothetical.remove(j);
             hypothetical.push(input[i]);
             if greater_than(&hypothetical, &best) {
-                println!(
-                    "New best: {:?} -> replacing {} with {} at index {}",
-                    hypothetical, best[j], input[i], i
-                );
                 best = hypothetical.clone();
             }
         }
