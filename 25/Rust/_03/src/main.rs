@@ -56,22 +56,51 @@ fn combinations(range: usize, group_size: usize) -> Vec<Vec<usize>> {
   return combinations;
 }
 
-fn best_n(input: &Vec<u64>, n: usize) -> u64 {
-  let combinations = combinations(input.len(), n);
-
-  let mut out = 0;
-  for combination in combinations {
-    let mut current_value = 0;
-    let mut current_position = 12;
-    for i in 0..n {
-      current_value += input[combination[i]] * (10_u64.pow(current_position));
-      current_position -= 1;
+fn greater_than(left: Vec<usize>, right: Vec<usize>) -> bool {
+  if left.len() != right.len() {
+    return left.len() > right.len();
+  }
+  for (i, j) in left.iter().zip(right.iter()) {
+    if i > j {
+      return true;
     }
-    if current_value > out {
-      out = current_value;
+    if i < j {
+      return false;
     }
   }
-  out / 10
+  false
+}
+
+fn compute_value(input: &Vec<usize>) -> usize {
+  let mut current_value = 0;
+  let mut current_position = input.len();
+  for i in 0..input.len() {
+    current_value += input[i] * (10_usize.pow(current_position));
+    current_position -= 1;
+  }
+  current_value
+}
+
+fn best_n(input: &Vec<u64>, n: usize) -> u64 {
+  
+  let mut best = vec![0; n];
+  for start in 0..(input.len() - n) {
+    let mut current = Vec::new();
+    for i in start..(start + n) {
+      current.push(i);
+    }
+    for i in (start + n)..input.len() {
+      if current[current.len() - 1] < input[i] {
+        stack.pop();
+        stack.push(input[i]);
+      }
+    }
+    if greater_than(current, best) {
+      best = current.clone();
+    }
+  }
+
+  return compute_value(&best) as u64;
 }
 
 fn part_two(input: &Vec<Vec<u64>>, n: usize) -> u64 {
