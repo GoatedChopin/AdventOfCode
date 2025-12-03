@@ -1,5 +1,4 @@
 use std::fs;
-use std::collections::HashMap;
 
 fn read_input(path: &str) -> Vec<Vec<u64>> {
     fs::read_to_string(path)
@@ -39,57 +38,40 @@ fn part_one(input: &Vec<Vec<u64>>) -> u64 {
     sum
 }
 
-fn combinations(range: usize, length: usize) -> Vec<Vec<usize>> {
+fn combinations(range: usize, group_size: usize) -> Vec<Vec<usize>> {
   let input = (0..range).collect::<Vec<usize>>();
   let mut combinations = Vec::new();
-  let length = input.len();
-  fn backtrack(start: usize, current: &mut Vec<usize>, result: &mut Vec<Vec<usize>>) {
-    if current.len() == length {
+  fn backtrack(start: usize, group_size: usize, current: &mut Vec<usize>, input: &Vec<usize>, result: &mut Vec<Vec<usize>>) {
+    if current.len() == group_size {
       result.push(current.clone());
       return;
     }
-    for i in start..length {
-      current.push(i);
-      backtrack(i + 1, current, result);
+    for i in start..input.len() {
+      current.push(input[i]);
+      backtrack(i + 1, group_size, current, input, result);
       current.pop();
     }
   }
-  backtrack(0, &mut Vec::new(), &mut combinations);
+  backtrack(0, group_size, &mut Vec::new(), &input, &mut combinations);
   return combinations;
 }
 
 fn best_n(input: &Vec<u64>, n: usize) -> u64 {
-  let mut added_indexes = HashMap::new();
-  let length = input.len();
+  let combinations = combinations(input.len(), n);
 
-  if n > length {
-    return 0;
-  }
-
-  for p in 0..n {
-    let mut best = 0;
-    let mut best_index = 0;
-    for i in 0..(length - (n - p)) {
-      if input[i] > best && !added_indexes.contains_key(&i) {
-        best = input[i];
-        best_index = i;
-      }
-    }
-    added_indexes.insert(best_index, p);
-  }
-    
   let mut out = 0;
-  let mut current_position = 12;
-  for i in 0..length {
-    if !added_indexes.contains_key(&i) {
-      continue;
+  for combination in combinations {
+    let mut current_value = 0;
+    let mut current_position = 12;
+    for i in 0..n {
+      current_value += input[combination[i]] * (10_u64.pow(current_position));
+      current_position -= 1;
     }
-    out += input[i] * (10_u64.pow(current_position));
-    current_position -= 1;
+    if current_value > out {
+      out = current_value;
+    }
   }
-  println!("Added indexes: {:?}", added_indexes);
-  println!("Out: {}", out);
-  out
+  out / 10
 }
 
 fn part_two(input: &Vec<Vec<u64>>, n: usize) -> u64 {
