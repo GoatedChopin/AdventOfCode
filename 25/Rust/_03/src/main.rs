@@ -38,25 +38,7 @@ fn part_one(input: &Vec<Vec<u64>>) -> u64 {
     sum
 }
 
-fn combinations(range: usize, group_size: usize) -> Vec<Vec<usize>> {
-  let input = (0..range).collect::<Vec<usize>>();
-  let mut combinations = Vec::new();
-  fn backtrack(start: usize, group_size: usize, current: &mut Vec<usize>, input: &Vec<usize>, result: &mut Vec<Vec<usize>>) {
-    if current.len() == group_size {
-      result.push(current.clone());
-      return;
-    }
-    for i in start..input.len() {
-      current.push(input[i]);
-      backtrack(i + 1, group_size, current, input, result);
-      current.pop();
-    }
-  }
-  backtrack(0, group_size, &mut Vec::new(), &input, &mut combinations);
-  return combinations;
-}
-
-fn greater_than(left: Vec<usize>, right: Vec<usize>) -> bool {
+fn greater_than(left: &Vec<u64>, right: &Vec<u64>) -> bool {
   if left.len() != right.len() {
     return left.len() > right.len();
   }
@@ -71,31 +53,31 @@ fn greater_than(left: Vec<usize>, right: Vec<usize>) -> bool {
   false
 }
 
-fn compute_value(input: &Vec<usize>) -> usize {
+fn compute_value(input: &Vec<u64>) -> u64 {
   let mut current_value = 0;
-  let mut current_position = input.len();
+  let mut current_position = 0;
   for i in 0..input.len() {
-    current_value += input[i] * (10_usize.pow(current_position));
-    current_position -= 1;
+    current_value += input[input.len() - i - 1] * (10_u64.pow(current_position));
+    current_position += 1;
   }
   current_value
 }
 
 fn best_n(input: &Vec<u64>, n: usize) -> u64 {
-  
   let mut best = vec![0; n];
+
   for start in 0..(input.len() - n) {
     let mut current = Vec::new();
     for i in start..(start + n) {
-      current.push(i);
+      current.push(input[i]);
     }
     for i in (start + n)..input.len() {
       if current[current.len() - 1] < input[i] {
-        stack.pop();
-        stack.push(input[i]);
+        current.pop();
+        current.push(input[i]);
       }
     }
-    if greater_than(current, best) {
+    if greater_than(&current, &best) {
       best = current.clone();
     }
   }
