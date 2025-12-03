@@ -1,0 +1,16 @@
+procedure COMBINATIONS(array A, integer n):
+    result ← empty list
+    current ← empty list
+    BACKTRACK(start = 0)
+    return result
+
+
+procedure BACKTRACK(start):
+    if length(current) = n:
+        append copy of current to result
+        return
+
+    for i from start to length(A) - 1:
+        append A[i] to current
+        BACKTRACK(i + 1)
+        remove last element from current
