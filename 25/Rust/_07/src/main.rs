@@ -15,6 +15,12 @@ enum Direction {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+struct Coordinate {
+    row: usize,
+    col: usize,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 struct Position {
     row: usize,
     col: usize,
@@ -126,58 +132,36 @@ fn part_one(grid: &Vec<Vec<Cell>>) -> usize {
     num_splits
 }
 
+fn get_splitter_positions(grid: &Vec<Vec<Cell>>) -> Vec<Coordinate> {
+  let mut positions = Vec::new();
+
+  for row in 0..grid.len() {
+    for col in 0..grid[row].len() {
+      if grid[row][col] == Cell::Splitter {
+        positions.push(Coordinate { row, col });
+      }
+    }
+  }
+  positions
+}
+
 fn part_two(grid: &Vec<Vec<Cell>>) -> usize {
   let start = find_start(grid);
-
-  let mut queue = Vec::new();
-  queue.push(start);
-
-  let mut visited = HashSet::new();
-  visited.insert(start);
-  let mut num_paths = 0;
-  while !queue.is_empty() {
-      let position = queue.pop().unwrap();
-      if !in_bounds(&position, grid) {
-          continue;
+  let mut mut_grid = vec![vec![0; grid[0].len()]; grid.len()];
+  mut_grid[start.row][start.col] = 1;
+  for row in 1..mut_grid.len() {
+    let mut new_row = mut_grid[row].clone();
+    for col in 0..mut_grid[row-1].len() {
+      if grid[row][col] == Cell::Splitter {
+        new_row[col-1] += mut_grid[row-1][col];
+        new_row[col+1] += mut_grid[row-1][col];
+      } else {
+        new_row[col] += mut_grid[row-1][col];
       }
-      let cell = grid[position.row][position.col];
-      match cell {
-          Cell::Splitter => {
-              let right = Position {
-                  row: position.row,
-                  col: position.col + 1,
-                  direction: position.direction,
-              };
-              let left = Position {
-                  row: position.row,
-                  col: position.col - 1,
-                  direction: position.direction,
-              };
-              if position.col > 0 && in_bounds(&left, grid) {
-                visited.insert(left);
-                queue.push(left);
-              } else {
-                num_paths += 1;
-              }
-              if in_bounds(&right, grid) {
-                visited.insert(right);
-                queue.push(right);
-              } else {
-                num_paths += 1;
-              }
-          }
-          _ => {
-            let new_position = Position { row: position.row + 1, col: position.col, direction: position.direction };
-            if in_bounds(&new_position, grid) {
-              queue.push(new_position);
-            } else {
-              num_paths += 1;
-            }
-          }
-      }
+    }
+    mut_grid[row] = new_row.clone();
   }
-
-  num_paths
+  mut_grid[mut_grid.len()-1].iter().sum()
 }
 
 fn test() {
