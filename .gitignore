@@ -1,3 +1,5 @@
 16/Go/inputs
 input.txt
 target/
+**/target/
+.DS_Store
