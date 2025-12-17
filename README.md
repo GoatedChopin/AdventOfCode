@@ -1,4 +1,4 @@
-# Advent of Code Solutions for years 2021+
+# Advent of Code Solutions
 
 [Advent of Code](https://adventofcode.com/) is an annual advent calendar with daily coding puzzles to be solved in any programming language of the participant's choice.
 
