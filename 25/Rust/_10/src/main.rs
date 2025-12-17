@@ -1,23 +1,30 @@
-use std::{collections::{HashSet, VecDeque}, fs};
+use std::{
+    cmp::Ordering,
+    collections::{HashSet, VecDeque},
+    fs,
+    os::unix::raw::blkcnt_t,
+};
+
+mod lp;
+use lp::{Matrix, search_constraints};
 
 #[derive(Debug, Clone)]
 struct Machine {
     desired: u16,
     buttons: Vec<u16>,
-    button_joltages: Vec<Vec<usize>>,
     joltages: Vec<u16>,
 }
 
 #[derive(Debug, Clone)]
 struct MachineState {
-  current: u16,
-  num_presses: u32,
+    current: u16,
+    num_presses: u32,
 }
 
 #[derive(Debug, Clone)]
 struct JoltageState {
-  current: Vec<u16>,
-  num_presses: u32,
+    current: Vec<u16>,
+    num_presses: u32,
 }
 
 enum ParseState {
@@ -27,24 +34,22 @@ enum ParseState {
 }
 
 impl Machine {
-    fn print(&self) {
-        println!("Desired: {:08b}", self.desired);
-        for button in &self.buttons {
-            println!(" Button: {:08b}", button);
-        }
-    }
     fn from_str(s: &str) -> Self {
         let mut state = ParseState::Desired;
         let parts = s.split(" ").collect::<Vec<&str>>();
         let mut desired = 0;
         let mut buttons = Vec::new();
         let mut joltages = Vec::new();
-        let mut button_joltages = Vec::new();
         for (i, part) in parts.iter().enumerate() {
             match state {
                 ParseState::Desired => {
                     let desired_unformatted = part;
-                    for (i, c) in desired_unformatted.replace("[", "").replace("]", "").chars().enumerate() {
+                    for (i, c) in desired_unformatted
+                        .replace("[", "")
+                        .replace("]", "")
+                        .chars()
+                        .enumerate()
+                    {
                         if c == '#' {
                             desired |= 1 << i;
                         }
@@ -61,7 +66,6 @@ impl Machine {
                         .split(",")
                         .map(|x| x.parse().unwrap())
                         .collect();
-                    button_joltages.push(flip_bits.iter().map(|x| *x as usize).collect());
                     let mut button = 0;
                     for bit in flip_bits {
                         button |= 1 << bit;
@@ -69,19 +73,18 @@ impl Machine {
                     buttons.push(button);
                 }
                 ParseState::Dimensions => {
-                  joltages = part
-                    .replace("{", "")
-                    .replace("}", "")
-                    .split(",")
-                    .map(|x| x.parse().unwrap())
-                    .collect();
+                    joltages = part
+                        .replace("{", "")
+                        .replace("}", "")
+                        .split(",")
+                        .map(|x| x.parse().unwrap())
+                        .collect();
                 }
             }
         }
         Self {
             desired,
             buttons,
-            button_joltages,
             joltages,
         }
     }
@@ -93,86 +96,81 @@ fn read_input(path: &str) -> Vec<Machine> {
 }
 
 fn minimum_presses(machine: &Machine) -> u32 {
-  let presses = 0;
-  let mut queue = VecDeque::new();
-  queue.push_back(MachineState {
-    current: 0,
-    num_presses: 0,
-  });
-  while !queue.is_empty() {
-    let m_state = queue.pop_front().unwrap();
-    // println!("Current: {:08b}, want {:08b}", m_state.current, machine.desired);
-    if m_state.current == machine.desired {
-      return m_state.num_presses;
+    let presses = 0;
+    let mut queue = VecDeque::new();
+    queue.push_back(MachineState {
+        current: 0,
+        num_presses: 0,
+    });
+    while !queue.is_empty() {
+        let m_state = queue.pop_front().unwrap();
+        // println!("Current: {:08b}, want {:08b}", m_state.current, machine.desired);
+        if m_state.current == machine.desired {
+            return m_state.num_presses;
+        }
+        for button in &machine.buttons {
+            let mut new_machine = m_state.clone();
+            new_machine.current ^= button;
+            new_machine.num_presses += 1;
+            queue.push_back(new_machine);
+        }
     }
-    for button in &machine.buttons {
-      let mut new_machine = m_state.clone();
-      new_machine.current ^= button;
-      new_machine.num_presses += 1;
-      queue.push_back(new_machine);
-    }
-  }
-  presses
+    presses
 }
 
 fn part_one(machines: &Vec<Machine>) -> u32 {
-  let mut all_presses = 0;
-  for machine in machines {
-    // machine.print();
-    all_presses += minimum_presses(machine);
-  }
-  all_presses
-}
-
-fn minimum_joltages(machine: &Machine) -> u32 {
-  let mut queue = VecDeque::new();
-  queue.push_back(JoltageState {
-    current: vec![0; machine.joltages.len()],
-    num_presses: 0,
-  });
-  let mut visited = HashSet::new();
-  let mut max_presses = 0;
-  while !queue.is_empty() {
-    let j_state = queue.pop_front().unwrap();
-    if j_state.num_presses > max_presses {
-      println!("New max presses: {}, checking {:?} states", j_state.num_presses, queue.len());
-      max_presses = j_state.num_presses;
+    let mut all_presses = 0;
+    for machine in machines {
+        // machine.print();
+        all_presses += minimum_presses(machine);
     }
-
-    // println!("Current: {:?}, want {:?}", j_state.current, machine.joltages);
-    if j_state.current == machine.joltages {
-      return j_state.num_presses;
-    }
-    if machine.joltages.iter().zip(j_state.current.iter()).any(|(j, c)| j < c) {
-      continue;
-    }
-    for button_joltage in &machine.button_joltages {
-      let mut new_joltage = j_state.clone();
-      for slot in button_joltage {
-        new_joltage.current[*slot] += 1;
-        if new_joltage.current[*slot] > machine.joltages[*slot] {
-          // println!("Invalid state: {:?}, want {:?}", new_joltage.current, machine.joltages);
-          continue;
-        }
-        if visited.contains(&new_joltage.current) {
-          continue;
-        }
-        visited.insert(new_joltage.current.clone());
-      }
-      new_joltage.num_presses += 1;
-      queue.push_back(new_joltage);
-    }
-  }
-  panic!("No solution found");
+    all_presses
 }
 
 fn part_two(machines: &Vec<Machine>) -> u32 {
-  let mut all_joltages = 0;
-  for machine in machines {
-    machine.print();
-    all_joltages += minimum_joltages(machine);
-  }
-  all_joltages
+    let mut all_joltages = 0;
+    for machine in machines {
+        // Each machine needs a matrix of m x n where m is the machine
+        let m = machine.joltages.iter().enumerate().map(|(j, jolt)| {
+            let mut row = vec![0.0; machine.buttons.len() + 1];
+            for (b, button) in machine.buttons.iter().enumerate() {
+                if button & (1 << j) != 0 {
+                    row[b] = 1.0;
+                }
+            }
+            row[machine.buttons.len()] = *jolt as f64;
+            row
+        }).collect();
+        let grid = Matrix::from_data(m);
+        // println!("Grid:");
+        // grid.print();
+        let reduced_grid = grid.gaussian_form();
+        // println!("Reduced grid:");
+        // reduced_grid.print();
+        let constraints = reduced_grid.get_constraints();
+
+        for (i, constraint) in constraints.iter().enumerate() {
+            println!("  Constraint: {:.2} <= x{} <= {:.2}", constraint.lower_bound, i, constraint.upper_bound);
+        }
+
+        let coefficients = search_constraints(
+            &grid
+                .data
+                .clone()
+                .into_iter()
+                .map(|row| {
+                    row[..row.len() - 1]
+                        .into_iter()
+                        .map(|x| x.round() as i32)
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>(),
+            &constraints,
+            &machine.joltages.iter().map(|j| *j as i32).collect(),
+        );
+        all_joltages += coefficients.iter().map(|x| *x as u32).sum::<u32>();
+    }
+    all_joltages as u32
 }
 
 fn test() {
