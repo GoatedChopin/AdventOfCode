@@ -320,6 +320,6 @@ fn test() {
 fn main() {
     test();
     let input = read_input("input.txt");
-    // println!("{}", part_one(&input));
-    println!("{}", part_two(&input));
+    println!("Part one: {}", part_one(&input));
+    println!("Part two: {}", part_two(&input));
 }
