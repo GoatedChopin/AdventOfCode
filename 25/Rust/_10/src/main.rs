@@ -1,12 +1,8 @@
-use std::{
-    cmp::Ordering,
-    collections::{HashSet, VecDeque},
-    fs,
-    os::unix::raw::blkcnt_t,
-};
+use std::{collections::VecDeque, fs};
 
-mod lp;
-use lp::{Matrix, search_constraints};
+use num::Rational64;
+
+mod solver;
 
 #[derive(Debug, Clone)]
 struct Machine {
@@ -127,50 +123,190 @@ fn part_one(machines: &Vec<Machine>) -> u32 {
     all_presses
 }
 
-fn part_two(machines: &Vec<Machine>) -> u32 {
-    let mut all_joltages = 0;
-    for machine in machines {
-        // Each machine needs a matrix of m x n where m is the machine
-        let m = machine.joltages.iter().enumerate().map(|(j, jolt)| {
-            let mut row = vec![0.0; machine.buttons.len() + 1];
-            for (b, button) in machine.buttons.iter().enumerate() {
-                if button & (1 << j) != 0 {
-                    row[b] = 1.0;
+// Helper function to check if all solution values are integers
+fn is_integer_solution(solution: &Vec<Rational64>) -> bool {
+    solution.iter().all(|x| *x.denom() == 1)
+}
+
+// Helper function to verify the solution produces the correct joltages
+fn verify_joltages(solution: &Vec<Rational64>, machine: &Machine) -> bool {
+    let mut joltage_state = vec![0i64; machine.joltages.len()];
+    for (j, _jolt) in machine.joltages.iter().enumerate() {
+        for (b, button) in machine.buttons.iter().enumerate() {
+            if button & (1 << j) != 0 {
+                joltage_state[j] += solution[b].numer();
+            }
+        }
+    }
+    joltage_state
+        .iter()
+        .zip(machine.joltages.iter())
+        .all(|(x, y)| *x == *y as i64)
+}
+
+// Helper function to find the first fractional variable
+fn find_fractional_variable(solution: &Vec<Rational64>) -> Option<usize> {
+    solution.iter().position(|x| *x.denom() != 1)
+}
+
+// Helper function to find integer solution with branch-and-bound given an upper bound
+fn find_integer_solution_with_bound(
+    base_constraints: &Vec<(Vec<Rational64>, solver::Constraint, Rational64)>,
+    num_buttons: usize,
+    objective: &Vec<Rational64>,
+    upper_bound: i64,
+    machine: &Machine,
+) -> Option<(Vec<Rational64>, i64)> {
+    let mut constraints = base_constraints.clone();
+    constraints.push((
+        vec![Rational64::from(1); num_buttons],
+        solver::Constraint::LessThan,
+        Rational64::from(upper_bound),
+    ));
+    
+    let solver = solver::SimplexSolver::new(constraints.clone(), num_buttons);
+    let solution_result = solver.solve(objective);
+    
+    match solution_result {
+        Ok(solution) => {
+            if is_integer_solution(&solution) && verify_joltages(&solution, machine) {
+                let value = solution.iter().map(|x| x.numer()).sum::<i64>();
+                return Some((solution, value));
+            }
+            
+            // Fractional solution - need to branch
+            // Use simple branch-and-bound with limited depth
+            let mut work_queue = VecDeque::new();
+            work_queue.push_back(constraints);
+            
+            let mut best_solution: Option<(Vec<Rational64>, i64)> = None;
+            let max_branches = 1000;
+            let mut branches = 0;
+            
+            while let Some(branch_constraints) = work_queue.pop_front() {
+                branches += 1;
+                if branches > max_branches {
+                    break;
+                }
+                
+                let solver = solver::SimplexSolver::new(branch_constraints.clone(), num_buttons);
+                if let Ok(sol) = solver.solve(objective) {
+                    if is_integer_solution(&sol) && verify_joltages(&sol, machine) {
+                        let val = sol.iter().map(|x| x.numer()).sum::<i64>();
+                        if best_solution.is_none() || val < best_solution.as_ref().unwrap().1 {
+                            best_solution = Some((sol, val));
+                        }
+                    } else if let Some(frac_idx) = find_fractional_variable(&sol) {
+                        let frac_value = sol[frac_idx];
+                        let floor_val = frac_value.numer() / frac_value.denom();
+                        let ceil_val = if frac_value.numer() % frac_value.denom() == 0 {
+                            floor_val
+                        } else {
+                            floor_val + 1
+                        };
+                        
+                        let mut constraint_vec = vec![Rational64::ZERO; num_buttons];
+                        constraint_vec[frac_idx] = Rational64::from(1);
+                        
+                        let mut left = branch_constraints.clone();
+                        left.push((constraint_vec.clone(), solver::Constraint::LessThan, Rational64::from(floor_val)));
+                        work_queue.push_back(left);
+                        
+                        let mut right = branch_constraints.clone();
+                        right.push((constraint_vec, solver::Constraint::GreaterThan, Rational64::from(ceil_val)));
+                        work_queue.push_back(right);
+                    }
                 }
             }
-            row[machine.buttons.len()] = *jolt as f64;
-            row
-        }).collect();
-        let grid = Matrix::from_data(m);
-        // println!("Grid:");
-        // grid.print();
-        let reduced_grid = grid.gaussian_form();
-        // println!("Reduced grid:");
-        // reduced_grid.print();
-        let constraints = reduced_grid.get_constraints();
-
-        for (i, constraint) in constraints.iter().enumerate() {
-            println!("  Constraint: {:.2} <= x{} <= {:.2}", constraint.lower_bound, i, constraint.upper_bound);
+            
+            best_solution
         }
-
-        let coefficients = search_constraints(
-            &grid
-                .data
-                .clone()
-                .into_iter()
-                .map(|row| {
-                    row[..row.len() - 1]
-                        .into_iter()
-                        .map(|x| x.round() as i32)
-                        .collect::<Vec<_>>()
-                })
-                .collect::<Vec<_>>(),
-            &constraints,
-            &machine.joltages.iter().map(|j| *j as i32).collect(),
-        );
-        all_joltages += coefficients.iter().map(|x| *x as u32).sum::<u32>();
+        Err(_) => None,
     }
-    all_joltages as u32
+}
+
+fn part_two(machines: &Vec<Machine>) -> i64 {
+    let mut all_joltages = 0;
+    for (m, machine) in machines.iter().enumerate() {
+        println!(
+            "Solving machine {} -> {:?}",
+            m + 1,
+            machine.joltages
+        );
+        
+        // Set up base constraints: joltage equations + non-negativity
+        let mut base_constraints: Vec<(Vec<Rational64>, solver::Constraint, Rational64)> = vec![];
+        
+        // Joltage equation constraints
+        for (j, jolt) in machine.joltages.iter().enumerate() {
+            let mut joltage_vector = vec![Rational64::ZERO; machine.buttons.len()];
+            for (b, button) in machine.buttons.iter().enumerate() {
+                if button & (1 << j) != 0 {
+                    joltage_vector[b] = Rational64::from(1);
+                }
+            }
+            base_constraints.push((
+                joltage_vector,
+                solver::Constraint::EqualTo,
+                Rational64::from(*jolt as i64),
+            ));
+        }
+        
+        // Non-negativity constraints
+        for b in 0..machine.buttons.len() {
+            let mut button_vector = vec![Rational64::ZERO; machine.buttons.len()];
+            button_vector[b] = Rational64::from(1);
+            base_constraints.push((
+                button_vector,
+                solver::Constraint::GreaterThan,
+                Rational64::ZERO,
+            ));
+        }
+        
+        // Binary search for minimum total button presses
+        // Upper bound: sum of all joltages (worst case: each joltage needs 1 press)
+        let upper_bound: i64 = machine.joltages.iter().map(|j| *j as i64).sum();
+        let mut low = 0i64;
+        let mut high = upper_bound;
+        let mut best_solution: Option<Vec<Rational64>> = None;
+        let mut best_value: Option<i64> = None;
+        
+        // Objective: minimize sum of button presses
+        let objective = vec![Rational64::from(1); machine.buttons.len()];
+        
+        println!("  Binary searching in range [{}..{}]", low, high);
+        
+        while low <= high {
+            let mid = (low + high) / 2;
+            
+            // Try to find an integer solution with sum <= mid using branch-and-bound if needed
+            let result = find_integer_solution_with_bound(&base_constraints, machine.buttons.len(), &objective, mid, machine);
+            
+            match result {
+                Some((solution, value)) => {
+                    println!("    Found valid solution at mid={}: sum={}", mid, value);
+                    best_solution = Some(solution);
+                    best_value = Some(value);
+                    high = value - 1;  // Try to find better
+                }
+                None => {
+                    // No solution at this bound, need higher
+                    println!("    Mid={}: no integer solution found", mid);
+                    low = mid + 1;
+                }
+            }
+        }
+        
+        if best_solution.is_none() {
+            panic!("No solution found for machine {}", m + 1);
+        }
+        
+        let total_presses = best_value.unwrap();
+        println!("  Best solution: {} presses\n", total_presses);
+        
+        all_joltages += total_presses;
+    }
+    all_joltages
 }
 
 fn test() {
