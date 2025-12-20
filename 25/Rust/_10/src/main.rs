@@ -117,18 +117,15 @@ fn minimum_presses(machine: &Machine) -> u32 {
 fn part_one(machines: &Vec<Machine>) -> u32 {
     let mut all_presses = 0;
     for machine in machines {
-        // machine.print();
         all_presses += minimum_presses(machine);
     }
     all_presses
 }
 
-// Helper function to check if all solution values are integers
 fn is_integer_solution(solution: &Vec<Rational64>) -> bool {
     solution.iter().all(|x| *x.denom() == 1)
 }
 
-// Helper function to verify the solution produces the correct joltages
 fn verify_joltages(solution: &Vec<Rational64>, machine: &Machine) -> bool {
     let mut joltage_state = vec![0i64; machine.joltages.len()];
     for (j, _jolt) in machine.joltages.iter().enumerate() {
@@ -144,12 +141,10 @@ fn verify_joltages(solution: &Vec<Rational64>, machine: &Machine) -> bool {
         .all(|(x, y)| *x == *y as i64)
 }
 
-// Helper function to find the first fractional variable
 fn find_fractional_variable(solution: &Vec<Rational64>) -> Option<usize> {
     solution.iter().position(|x| *x.denom() != 1)
 }
 
-// Helper function to find integer solution with branch-and-bound given an upper bound
 fn find_integer_solution_with_bound(
     base_constraints: &Vec<(Vec<Rational64>, solver::Constraint, Rational64)>,
     num_buttons: usize,
@@ -171,32 +166,30 @@ fn find_integer_solution_with_bound(
         Ok(solution) => {
             if is_integer_solution(&solution) && verify_joltages(&solution, machine) {
                 let value = solution.iter().map(|x| x.numer()).sum::<i64>();
-                return Some((solution, value));
+            return Some((solution, value));
+        }
+        
+        let mut work_queue = VecDeque::new();
+        work_queue.push_back(constraints);
+        
+        let mut best_solution: Option<(Vec<Rational64>, i64)> = None;
+        let max_branches = 1000;
+        let mut branches = 0;
+        
+        while let Some(branch_constraints) = work_queue.pop_front() {
+            branches += 1;
+            if branches > max_branches {
+                break;
             }
             
-            // Fractional solution - need to branch
-            // Use simple branch-and-bound with limited depth
-            let mut work_queue = VecDeque::new();
-            work_queue.push_back(constraints);
-            
-            let mut best_solution: Option<(Vec<Rational64>, i64)> = None;
-            let max_branches = 1000;
-            let mut branches = 0;
-            
-            while let Some(branch_constraints) = work_queue.pop_front() {
-                branches += 1;
-                if branches > max_branches {
-                    break;
-                }
-                
-                let solver = solver::SimplexSolver::new(branch_constraints.clone(), num_buttons);
-                if let Ok(sol) = solver.solve(objective) {
-                    if is_integer_solution(&sol) && verify_joltages(&sol, machine) {
-                        let val = sol.iter().map(|x| x.numer()).sum::<i64>();
-                        if best_solution.is_none() || val < best_solution.as_ref().unwrap().1 {
-                            best_solution = Some((sol, val));
-                        }
-                    } else if let Some(frac_idx) = find_fractional_variable(&sol) {
+            let solver = solver::SimplexSolver::new(branch_constraints.clone(), num_buttons);
+            if let Ok(sol) = solver.solve(objective) {
+                if is_integer_solution(&sol) && verify_joltages(&sol, machine) {
+                    let val = sol.iter().map(|x| x.numer()).sum::<i64>();
+                    if best_solution.is_none() || val < best_solution.as_ref().unwrap().1 {
+                        best_solution = Some((sol, val));
+                    }
+                } else if let Some(frac_idx) = find_fractional_variable(&sol) {
                         let frac_value = sol[frac_idx];
                         let floor_val = frac_value.numer() / frac_value.denom();
                         let ceil_val = if frac_value.numer() % frac_value.denom() == 0 {
@@ -234,10 +227,8 @@ fn part_two(machines: &Vec<Machine>) -> i64 {
             machine.joltages
         );
         
-        // Set up base constraints: joltage equations + non-negativity
         let mut base_constraints: Vec<(Vec<Rational64>, solver::Constraint, Rational64)> = vec![];
         
-        // Joltage equation constraints
         for (j, jolt) in machine.joltages.iter().enumerate() {
             let mut joltage_vector = vec![Rational64::ZERO; machine.buttons.len()];
             for (b, button) in machine.buttons.iter().enumerate() {
@@ -252,7 +243,6 @@ fn part_two(machines: &Vec<Machine>) -> i64 {
             ));
         }
         
-        // Non-negativity constraints
         for b in 0..machine.buttons.len() {
             let mut button_vector = vec![Rational64::ZERO; machine.buttons.len()];
             button_vector[b] = Rational64::from(1);
@@ -263,15 +253,12 @@ fn part_two(machines: &Vec<Machine>) -> i64 {
             ));
         }
         
-        // Binary search for minimum total button presses
-        // Upper bound: sum of all joltages (worst case: each joltage needs 1 press)
         let upper_bound: i64 = machine.joltages.iter().map(|j| *j as i64).sum();
         let mut low = 0i64;
         let mut high = upper_bound;
         let mut best_solution: Option<Vec<Rational64>> = None;
         let mut best_value: Option<i64> = None;
         
-        // Objective: minimize sum of button presses
         let objective = vec![Rational64::from(1); machine.buttons.len()];
         
         println!("  Binary searching in range [{}..{}]", low, high);
@@ -279,7 +266,6 @@ fn part_two(machines: &Vec<Machine>) -> i64 {
         while low <= high {
             let mid = (low + high) / 2;
             
-            // Try to find an integer solution with sum <= mid using branch-and-bound if needed
             let result = find_integer_solution_with_bound(&base_constraints, machine.buttons.len(), &objective, mid, machine);
             
             match result {
@@ -287,10 +273,9 @@ fn part_two(machines: &Vec<Machine>) -> i64 {
                     println!("    Found valid solution at mid={}: sum={}", mid, value);
                     best_solution = Some(solution);
                     best_value = Some(value);
-                    high = value - 1;  // Try to find better
+                    high = value - 1;
                 }
                 None => {
-                    // No solution at this bound, need higher
                     println!("    Mid={}: no integer solution found", mid);
                     low = mid + 1;
                 }
