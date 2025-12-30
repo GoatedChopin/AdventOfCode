@@ -1,8 +1,9 @@
 use num::rational::Rational64;
 use std::fs;
 
+mod ilp;
 mod solver;
-use solver::{Constraint, SimplexSolver};
+use solver::Constraint;
 
 struct ClawMachine {
     prices: Vec<Rational64>,
@@ -67,81 +68,20 @@ impl ClawMachine {
         product == *objective
     }
 
-    pub fn solve(&self) -> Rational64 {
-        let constraints = self.constraints();
-        // Use Branch and Bound to find optimal integer solution
-        self.branch_and_bound(&constraints)
-    }
-
-    fn branch_and_bound(&self, constraints: &Vec<(Vec<Rational64>, Constraint, Rational64)>) -> Rational64 {
-        let mut best_cost = None;
-        
-        // Use Branch and Bound
-        let mut stack: Vec<Vec<(Vec<Rational64>, Constraint, Rational64)>> = Vec::new();
-        stack.push(constraints.clone());
-        
-        while let Some(current_constraints) = stack.pop() {
-            // Solve LP relaxation for current node
-            let solver = SimplexSolver::new(current_constraints.clone(), self.buttons.len());
-            let solution = solver.solve(&self.prices);
-            
-            if solution.is_err() {
-                // Infeasible, prune this branch
-                continue;
-            }
-            
-            let solution = solution.unwrap();
-            let cost = self.scoring_fn(&solution);
-            
-            // Prune if this branch can't improve best solution
-            if best_cost.is_some() && cost >= best_cost.unwrap() {
-                continue;
-            }
-            
-            // Check if solution is integer and valid
-            if self.valid_solution(&solution, &self.objective) {
-                // Found a valid integer solution
-                if best_cost.is_none() || cost < best_cost.unwrap() {
-                    best_cost = Some(cost);
-                }
-                continue;
-            }
-            
-            // Find first non-integer variable to branch on
-            let mut branch_var = None;
-            for (i, value) in solution.iter().enumerate() {
-                if !value.is_integer() {
-                    branch_var = Some(i);
-                    break;
-                }
-            }
-            
-            if let Some(var_idx) = branch_var {
-                let value = solution[var_idx];
-                let floor_val = value.floor();
-                let ceil_val = value.ceil();
-                
-                // Left branch: x <= floor(value)
-                let mut left_constraints = current_constraints.clone();
-                let mut left_coeffs = vec![Rational64::ZERO; self.buttons.len()];
-                left_coeffs[var_idx] = Rational64::from(1);
-                left_constraints.push((left_coeffs, Constraint::LessThan, floor_val));
-                stack.push(left_constraints);
-                
-                // Right branch: x >= ceil(value)
-                let mut right_constraints = current_constraints.clone();
-                let mut right_coeffs = vec![Rational64::ZERO; self.buttons.len()];
-                right_coeffs[var_idx] = Rational64::from(1);
-                right_constraints.push((right_coeffs, Constraint::GreaterThan, ceil_val));
-                stack.push(right_constraints);
-            }
+    fn solve(&self) -> Rational64 {
+        let solution = ilp::branch_and_bound(
+            &self.constraints(),
+            &self.prices.iter().map(|x| -x).collect(),
+            ilp::BranchAndBoundMode::Maximize,
+        );
+        if solution.is_none() {
+            return Rational64::ZERO;
         }
-        
-        if let Some(best) = best_cost {
-            best
-        } else {
-            panic!("No integer solution found");
+        let solution = solution.unwrap();
+        if !self.valid_solution(&solution, &self.objective) {
+            return Rational64::ZERO;
         }
+        self.scoring_fn(&solution)
     }
 }
 
@@ -209,6 +149,24 @@ fn part_one(machines: &Vec<ClawMachine>) -> Rational64 {
     total_tokens
 }
 
+fn part_two(machines: &Vec<ClawMachine>) -> Rational64 {
+    let mut total_tokens = Rational64::ZERO;
+    for machine in machines {
+        let new_machine = ClawMachine {
+            prices: machine.prices.clone(),
+            buttons: machine.buttons.clone(),
+            objective: machine
+                .objective
+                .iter()
+                .map(|x| x + Rational64::from(10000000000000))
+                .collect(),
+        };
+        let solution = new_machine.solve();
+        total_tokens += solution;
+    }
+    total_tokens
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -217,12 +175,21 @@ mod tests {
     fn test_part_one() {
         let machines = read_input("test.txt");
         let solution = part_one(&machines);
-        assert_eq!(solution, Rational64::from(28138));
+        assert_eq!(solution, Rational64::from(480));
+    }
+
+    #[test]
+    fn test_part_two() {
+        let machines = read_input("test.txt");
+        let solution = part_two(&machines);
+        assert_eq!(solution, Rational64::from(875318608908));
     }
 }
 
 fn main() {
     let machines = read_input("input.txt");
     let solution = part_one(&machines);
-    println!("Solution: {}", solution);
+    println!("Part one: {}", solution);
+    let solution = part_two(&machines);
+    println!("Part two: {}", solution);
 }

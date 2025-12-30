@@ -156,7 +156,7 @@ impl SimplexSolver {
         best_row
     }
 
-    fn phase1(&mut self) -> Result<(), String> {
+    fn phase1(&mut self) -> Option<Vec<Rational64>> {
         let obj_row = self.num_constraints;
         let rhs_col = self.num_cols - 1;
 
@@ -186,19 +186,19 @@ impl SimplexSolver {
             let entering_col = entering.unwrap();
             let leaving = self.find_leaving(entering_col);
             if leaving.is_none() {
-                return Err("Phase 1 unbounded".to_string());
+                return None;
             }
             self.pivot(leaving.unwrap(), entering_col);
         }
 
         if self.tableau[obj_row][rhs_col] > ZERO {
-            return Err("Problem is infeasible".to_string());
+            return None;
         }
 
-        Ok(())
+        Some(vec![])
     }
 
-    fn phase2(&mut self, objective: &[Rational64]) -> Result<Vec<Rational64>, String> {
+    fn phase2(&mut self, objective: &[Rational64]) -> Option<Vec<Rational64>> {
         let obj_row = self.num_constraints;
         let rhs_col = self.num_cols - 1;
 
@@ -228,7 +228,7 @@ impl SimplexSolver {
             let entering_col = entering.unwrap();
             let leaving = self.find_leaving(entering_col);
             if leaving.is_none() {
-                return Err("Phase 2 unbounded".to_string());
+                return None;
             }
             self.pivot(leaving.unwrap(), entering_col);
         }
@@ -241,201 +241,17 @@ impl SimplexSolver {
             }
         }
 
-        Ok(solution)
+        Some(solution)
     }
 
-    pub fn solve(mut self, objective: &[Rational64]) -> Result<Vec<Rational64>, String> {
+    pub fn solve(mut self, objective: &[Rational64]) -> Option<Vec<Rational64>> {
         if self.artificial_start < self.num_cols - 1 {
-            self.phase1()?;
+            let is_feasible= self.phase1();
+            if is_feasible.is_none() {
+                return None;
+            }
         }
         self.phase2(objective)
-    }
-
-    pub fn optimize(
-        self,
-        objective: &[Rational64],
-        scoring_fn: impl Fn(&Vec<Rational64>) -> Rational64,
-    ) -> Option<Vec<Rational64>> {
-        let mut best_solution;
-        let mut best_value;
-
-        let solver: SimplexSolver = self.clone();
-
-        // Get the initial solution
-        let initial_solution = solver.clone().solve(objective);
-        if initial_solution.is_err() {
-            return None;
-        }
-        let initial_solution = initial_solution.unwrap();
-        let initial_score = scoring_fn(&initial_solution);
-        best_value = initial_score;
-        best_solution = Some(initial_solution.clone());
-
-        let mut search_directions = vec![SearchDirection::Stay; initial_solution.len()];
-
-        // Wiggle each variable in the initial solution by 1 in both directions, scoring each hypothetical solution
-        // If the score is better than the best score, we know we need to search over that direction with an artificial constraint
-        for (i, value) in initial_solution.iter().enumerate() {
-            let mut new_solution = initial_solution.clone();
-            let rounded_value = value.round();
-            let up_value = rounded_value + 1;
-            let down_value = rounded_value - 1;
-            new_solution[i] = up_value;
-            let up_score = scoring_fn(&new_solution);
-            new_solution[i] = down_value;
-            let down_score = scoring_fn(&new_solution);
-            if up_score > best_value {
-                search_directions[i] = SearchDirection::Up;
-            } else if down_score > best_value {
-                search_directions[i] = SearchDirection::Down;
-            }
-        }
-
-        // We should figure out the max value of each variable that improves in the up direction
-        // ...and the min value of each variable that improves in the down direction
-        let mut max_values = vec![Rational64::from(i64::MAX); initial_solution.len()];
-        let mut min_values = vec![Rational64::from(i64::MIN); initial_solution.len()];
-        for i in 0..initial_solution.len() {
-            for constraint in solver.constraints.iter() {
-                let (coefficients, constraint_type, rhs) = constraint;
-                let coefficient = coefficients[i];
-                if coefficient == ZERO {
-                    continue;
-                }
-                match constraint_type {
-                    Constraint::LessThan => {
-                        // coefficient * x <= rhs
-                        // x <= rhs / coefficient (if coefficient > 0)
-                        // x >= rhs / coefficient (if coefficient < 0, inequality flips)
-                        if coefficient > ZERO {
-                            max_values[i] = max_values[i].min(rhs / coefficient);
-                        } else {
-                            min_values[i] = min_values[i].max(rhs / coefficient);
-                        }
-                    }
-                    Constraint::GreaterThan => {
-                        // coefficient * x >= rhs
-                        // x >= rhs / coefficient (if coefficient > 0)
-                        // x <= rhs / coefficient (if coefficient < 0, inequality flips)
-                        if coefficient > ZERO {
-                            min_values[i] = min_values[i].max(rhs / coefficient);
-                        } else {
-                            max_values[i] = max_values[i].min(rhs / coefficient);
-                        }
-                    }
-                    Constraint::EqualTo => {
-                        // For equality constraints, both bounds are the same
-                        let value = rhs / coefficient;
-                        min_values[i] = min_values[i].max(value);
-                        max_values[i] = max_values[i].min(value);
-                    }
-                }
-            }
-        }
-
-        // Now that we know which direction improves the score for each variable
-        // We can add artificial constraints to see if we can improve the score further
-        let mut can_improve = search_directions
-            .iter()
-            .any(|direction| direction != &SearchDirection::Stay);
-        while can_improve {
-            let midpoints = search_directions
-                .iter()
-                .enumerate()
-                .map(|(i, direction)| {
-                    if direction == &SearchDirection::Up {
-                        (max_values[i] + min_values[i]) / 2
-                    } else if direction == &SearchDirection::Down {
-                        (max_values[i] + min_values[i]) / 2
-                    } else {
-                        initial_solution[i]
-                    }
-                })
-                .collect::<Vec<Rational64>>();
-            for i in 0..search_directions.len() {
-                let direction = search_directions[i];
-                let artificial_constraint;
-                match direction {
-                    SearchDirection::Up => {
-                        artificial_constraint = (
-                            initial_solution
-                                .iter()
-                                .enumerate()
-                                .map(|(j, _)| {
-                                    if j == i {
-                                        Rational64::from(1)
-                                    } else {
-                                        Rational64::from(0)
-                                    }
-                                })
-                                .collect(),
-                            Constraint::GreaterThan,
-                            midpoints[i],
-                        );
-                    }
-                    SearchDirection::Down => {
-                        artificial_constraint = (
-                            initial_solution
-                                .iter()
-                                .enumerate()
-                                .map(|(j, _)| {
-                                    if j == i {
-                                        Rational64::from(1)
-                                    } else {
-                                        Rational64::from(0)
-                                    }
-                                })
-                                .collect(),
-                            Constraint::LessThan,
-                            midpoints[i],
-                        );
-                    }
-                    SearchDirection::Stay => {
-                        continue;
-                    }
-                }
-                let mut constraints = self.constraints.clone();
-                constraints.push(artificial_constraint);
-                let temp_solver = SimplexSolver::new(constraints, initial_solution.len());
-                let temp_solution = temp_solver.solve(&objective);
-                if temp_solution.is_err() {
-                    match direction {
-                        SearchDirection::Up => {
-                            max_values[i] = midpoints[i];
-                        }
-                        SearchDirection::Down => {
-                            min_values[i] = midpoints[i];
-                        }
-                        SearchDirection::Stay => {}
-                    }
-                    continue;
-                }
-                if temp_solution.is_ok() {
-                    let temp_solution = temp_solution.unwrap();
-                    let temp_score = scoring_fn(&temp_solution);
-                    if temp_score > best_value {
-                        best_value = temp_score;
-                        best_solution = Some(temp_solution.clone());
-                    }
-                }
-                match direction {
-                    SearchDirection::Up => {
-                        min_values[i] = midpoints[i];
-                    }
-                    SearchDirection::Down => {
-                        max_values[i] = midpoints[i];
-                    }
-                    SearchDirection::Stay => {
-                        continue;
-                    }
-                }
-            }
-            can_improve = search_directions.iter().enumerate().any(|(i, direction)| {
-                direction != &SearchDirection::Stay && max_values[i] > min_values[i]
-            });
-        }
-
-        best_solution
     }
 }
 
