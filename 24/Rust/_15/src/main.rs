@@ -102,6 +102,7 @@ struct PartTwoOutcome {
     robot_position: Point,
     boxes_to_remove: HashSet<Box>,
     boxes_to_add: HashSet<Box>,
+    links_to_remove: HashSet<(Point, Point)>,
     links_to_add: HashSet<(Point, Point)>,
 }
 
@@ -149,6 +150,22 @@ impl Problem {
     }
 
     fn can_move_box(&self, position: Point, instruction: &Direction) -> (bool, HashSet<(Point, Point)>) {
+        let mut visited = HashSet::new();
+        self.can_move_box_recursive(position, instruction, &mut visited)
+    }
+
+    fn can_move_box_recursive(
+        &self,
+        position: Point,
+        instruction: &Direction,
+        visited: &mut HashSet<Point>,
+    ) -> (bool, HashSet<(Point, Point)>) {
+        // Prevent infinite recursion by tracking visited boxes
+        if visited.contains(&position) {
+            return (true, HashSet::new());
+        }
+        visited.insert(position);
+
         let mut boxes_to_remove = HashSet::new();
         let new_position = position.move_by(&instruction);
         let linked_position = self.links.get(&position).unwrap();
@@ -158,17 +175,21 @@ impl Problem {
         }
         boxes_to_remove.insert((position, *linked_position));
         let mut can_move = true;
+        // Check if there's a box at new_position (where current box would move to)
+        // Skip if it's the linked box (already being moved)
         if self.boxes.contains(&Box {
             position: new_position,
-        }) {
-          let (og_can_move, og_boxes_to_remove) = self.can_move_box(new_position, instruction);
+        }) && new_position != *linked_position {
+          let (og_can_move, og_boxes_to_remove) = self.can_move_box_recursive(new_position, instruction, visited);
           can_move = can_move && og_can_move;
           boxes_to_remove.extend(og_boxes_to_remove);
         }
+        // Check if there's a box at new_linked_position (where linked box would move to)
+        // Skip if it's the current box (already being moved)
         if self.boxes.contains(&Box {
             position: new_linked_position,
-        }) {
-          let (linked_can_move, linked_boxes_to_remove) = self.can_move_box(new_linked_position, instruction);
+        }) && new_linked_position != position {
+          let (linked_can_move, linked_boxes_to_remove) = self.can_move_box_recursive(new_linked_position, instruction, visited);
           can_move = can_move && linked_can_move;
           boxes_to_remove.extend(linked_boxes_to_remove);
         }
@@ -198,6 +219,7 @@ impl Problem {
                 robot_position: self.robot.position,
                 boxes_to_remove: HashSet::new(),
                 boxes_to_add: HashSet::new(),
+                links_to_remove: HashSet::new(),
                 links_to_add: HashSet::new(),
             };
         }
@@ -212,6 +234,7 @@ impl Problem {
                     robot_position: self.robot.position,
                     boxes_to_remove: HashSet::new(),
                     boxes_to_add: HashSet::new(),
+                    links_to_remove: HashSet::new(),
                     links_to_add: HashSet::new(),
                 };
             }
@@ -240,6 +263,7 @@ impl Problem {
                 robot_position: new_position,
                 boxes_to_remove: flat_boxes_to_remove,
                 boxes_to_add: boxes_to_add,
+                links_to_remove: links_to_remove,
                 links_to_add: links_to_add,
             };
         }
@@ -247,6 +271,7 @@ impl Problem {
             robot_position: new_position,
             boxes_to_remove: HashSet::new(),
             boxes_to_add: HashSet::new(),
+            links_to_remove: HashSet::new(),
             links_to_add: HashSet::new(),
         }
     }
@@ -403,22 +428,40 @@ fn part_two(problem: Problem) -> usize {
         if outcome.boxes_to_remove.len() > 0 {
           outcome.boxes_to_remove.iter().for_each(|b| {
             problem.boxes.remove(&b);
-            problem.links.remove(&b.position);
+          });
+          outcome.links_to_remove.iter().for_each(|(p1, p2)| {
+            problem.links.remove(p1);
+            problem.links.remove(p2);
           });
           outcome.boxes_to_add.iter().for_each(|b| {
             problem.boxes.insert(b.clone());
           });
           outcome.links_to_add.iter().for_each(|(p1, p2)| {
-            problem.links.insert(p1.clone(), p2.clone());
-            problem.links.insert(p2.clone(), p1.clone());
+            problem.links.insert(*p1, *p2);
+            problem.links.insert(*p2, *p1);
           });
         }
         problem.robot.position = outcome.robot_position;
         problem.render();
     }
     let mut score = 0;
+    let mut counted = HashSet::new();
     for b in problem.boxes {
-        score += b.gps();
+        if counted.contains(&b.position) {
+            continue;
+        }
+        // Only count the leftmost position of each box pair
+        if let Some(linked_pos) = problem.links.get(&b.position) {
+            if b.position.col <= linked_pos.col {
+                score += b.gps();
+                counted.insert(b.position);
+                counted.insert(*linked_pos);
+            }
+        } else {
+            // Box without a link (shouldn't happen in part two, but handle it)
+            score += b.gps();
+            counted.insert(b.position);
+        }
     }
     score
 }
