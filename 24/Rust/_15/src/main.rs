@@ -363,6 +363,7 @@ fn read_input_part_two(path: &str) -> Problem {
         for c in line.chars() {
             if c == '@' {
                 robot.position = Point { row, col };
+                col += 1;
             }
             if c == 'O' {
                 links.insert(Point { row, col }, Point { row, col: col + 1 });
@@ -380,10 +381,14 @@ fn read_input_part_two(path: &str) -> Problem {
                 col += 1;
                 walls.insert(Point { row, col });
             }
+            if c == '.' {
+              col += 1;
+            }
             if let Some(direction) = Direction::from_char(c) {
                 instructions.push(direction);
             }
             col += 1;
+
         }
     }
     Problem {
@@ -421,9 +426,9 @@ fn part_one(problem: Problem) -> usize {
 
 fn part_two(problem: Problem) -> usize {
     let mut problem = problem.clone();
-    problem.render();
+    // problem.render();
     for instruction in problem.instructions.clone().iter() {
-        println!("Moving robot {:?}", instruction);
+        // println!("Moving robot {:?}", instruction);
         let outcome = problem.move_robot_part_two(problem.robot.position, instruction);
         if outcome.boxes_to_remove.len() > 0 {
           outcome.boxes_to_remove.iter().for_each(|b| {
@@ -442,7 +447,7 @@ fn part_two(problem: Problem) -> usize {
           });
         }
         problem.robot.position = outcome.robot_position;
-        problem.render();
+        // problem.render();
     }
     let mut score = 0;
     let mut counted = HashSet::new();
