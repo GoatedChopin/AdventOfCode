@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use std::collections::{BinaryHeap, HashSet};
+use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::fs;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -39,6 +39,14 @@ impl Direction {
             Direction::Right => Direction::Down,
         }
     }
+    fn inverse(&self) -> Direction {
+        match self {
+            Direction::Up => Direction::Down,
+            Direction::Down => Direction::Up,
+            Direction::Left => Direction::Right,
+            Direction::Right => Direction::Left,
+        }
+    }
 }
 
 impl Point {
@@ -70,7 +78,6 @@ struct MazeProblem {
     walls: HashSet<Point>,
     turn_penalty: i32,
     move_penalty: i32,
-    heuristic: fn(&Point, &Point) -> i32,
 }
 
 fn read_input(path: &str) -> MazeProblem {
@@ -81,9 +88,6 @@ fn read_input(path: &str) -> MazeProblem {
     let mut walls = HashSet::new();
     let turn_penalty = -1000;
     let move_penalty = -1;
-    let heuristic = |a: &Point, b: &Point| {
-        (a.row as i32 - b.row as i32).abs() + (a.col as i32 - b.col as i32).abs()
-    };
     for (row, line) in lines.iter().enumerate() {
         for (col, c) in line.chars().enumerate() {
             if c == '#' {
@@ -106,7 +110,6 @@ fn read_input(path: &str) -> MazeProblem {
         walls,
         turn_penalty,
         move_penalty,
-        heuristic,
     }
 }
 
@@ -135,19 +138,19 @@ impl Ord for State {
     }
 }
 
-fn render_maze(walls: &HashSet<Point>, start: &Point, end: &Point) {
-    let max_row = walls.iter().map(|p| p.row).max().unwrap() + 1;
-    let max_col = walls.iter().map(|p| p.col).max().unwrap() + 1;
-    let mut maze = vec![vec!['.'; max_col]; max_row];
-    for wall in walls {
-        maze[wall.row][wall.col] = '#';
-    }
-    maze[start.row][start.col] = 'S';
-    maze[end.row][end.col] = 'E';
-    for row in maze {
-        println!("{}", row.iter().collect::<String>());
-    }
-}
+// fn render_maze(walls: &HashSet<Point>, start: &Point, end: &Point) {
+//     let max_row = walls.iter().map(|p| p.row).max().unwrap() + 1;
+//     let max_col = walls.iter().map(|p| p.col).max().unwrap() + 1;
+//     let mut maze = vec![vec!['.'; max_col]; max_row];
+//     for wall in walls {
+//         maze[wall.row][wall.col] = '#';
+//     }
+//     maze[start.row][start.col] = 'S';
+//     maze[end.row][end.col] = 'E';
+//     for row in maze {
+//         println!("{}", row.iter().collect::<String>());
+//     }
+// }
 
 fn part_one(problem: &MazeProblem) -> usize {
     let mut priority_queue = BinaryHeap::new();
@@ -215,44 +218,50 @@ fn part_one(problem: &MazeProblem) -> usize {
     usize::MAX
 }
 
-struct Outcome {
-    min_cost: usize,
-    direction: Direction,
+fn render_reachable_points(problem: &MazeProblem, reachable_points: &HashSet<Point>) {
+    let max_row = problem.walls.iter().map(|p| p.row).max().unwrap() + 1;
+    let max_col = problem.walls.iter().map(|p| p.col).max().unwrap() + 1;
+    let mut maze = vec![vec!['.'; max_col]; max_row];
+    for wall in problem.walls.iter() {
+        maze[wall.row][wall.col] = '#';
+    }
+    for reachable_point in reachable_points {
+        maze[reachable_point.row][reachable_point.col] = 'O';
+    }
+    for row in maze {
+        println!("{}", row.iter().collect::<String>());
+    }
 }
 
-fn min_cost_to_reach(
+fn flood_fill(
     problem: &MazeProblem,
-    start: &Position,
-    end: &Point,
+    starting_positions: &Vec<Position>,
+    penalty_map: Option<HashMap<Position, i32>>,
     max_penalty: i32,
-) -> Vec<Outcome> {
-    let mut priority_queue = BinaryHeap::new();
-    priority_queue.push(State {
-        position: start.clone(),
-        cost: 0,
-    });
-    let mut possible_directions = Vec::new();
-    let mut visited = HashSet::<Position>::new();
-    let mut min_cost_to_end: Option<usize> = None;
-    while let Some(current) = priority_queue.pop() {
-        if current.position.point == *end {
-            let cost = current.cost.abs() as usize;
-            if min_cost_to_end.is_none() || cost == min_cost_to_end.unwrap() {
-                min_cost_to_end = Some(cost);
-                possible_directions.push(Outcome {
-                    min_cost: cost,
-                    direction: current.position.direction,
-                });
-            }
+) -> HashMap<Position, i32> {
+    let mut queue = BinaryHeap::new();
+    for starting_position in starting_positions {
+        queue.push(State {
+            position: starting_position.clone(),
+            cost: 0,
+        });
+    }
+    let skip_all_empty_penalties = penalty_map.is_some();
+    let penalties = penalty_map.unwrap_or(HashMap::new());
+    let mut visited = HashMap::new();
+    while let Some(current) = queue.pop() {
+        let cost_from_other_direction = penalties.get(&current.position);
+        if cost_from_other_direction.is_none() && skip_all_empty_penalties {
             continue;
         }
-        if current.cost.abs() > max_penalty {
+        if current.cost.abs() + cost_from_other_direction.unwrap_or(&0) > max_penalty {
             continue;
         }
-        if visited.contains(&current.position) {
+        let existing_cost = visited.get(&current.position);
+        if existing_cost.is_some() && *existing_cost.unwrap() <= current.cost {
             continue;
         }
-        visited.insert(current.position.clone());
+        visited.insert(current.position.clone(), current.cost);
         let direction = current.position.direction;
         let forward = Position {
             point: current.position.point.move_by(&direction),
@@ -266,105 +275,90 @@ fn min_cost_to_reach(
             point: current.position.point.clone(),
             direction: direction.right(),
         };
-        if !problem.walls.contains(&forward.point) && !visited.contains(&forward) {
+        if !problem.walls.contains(&forward.point) {
             let forward_cost = current.cost - problem.move_penalty;
-            if forward_cost.abs() <= max_penalty {
-                priority_queue.push(State {
-                    position: Position {
-                        point: forward.point,
-                        direction: direction,
-                    },
-                    cost: forward_cost,
-                });
-            }
+            queue.push(State {
+                position: forward,
+                cost: forward_cost,
+            });
         }
-        if !problem.walls.contains(&left.point.move_by(&left.direction)) && !visited.contains(&left)
-        {
+        if !problem.walls.contains(&left.point.move_by(&left.direction)) {
             let left_cost = current.cost - problem.turn_penalty;
-            if left_cost.abs() <= max_penalty {
-                priority_queue.push(State {
-                    position: left,
-                    cost: left_cost,
-                });
-            }
+            queue.push(State {
+                position: left,
+                cost: left_cost,
+            });
         }
         if !problem
             .walls
             .contains(&right.point.move_by(&right.direction))
-            && !visited.contains(&right)
         {
             let right_cost = current.cost - problem.turn_penalty;
-            if right_cost.abs() <= max_penalty {
-                priority_queue.push(State {
-                    position: right,
-                    cost: right_cost,
-                });
-            }
+            queue.push(State {
+                position: right,
+                cost: right_cost,
+            });
         }
     }
-    possible_directions
+    visited
 }
 
-fn render_reachable_points(problem: &MazeProblem, reachable_points: &HashSet<Point>) {
-  let max_row = problem.walls.iter().map(|p| p.row).max().unwrap() + 1;
-  let max_col = problem.walls.iter().map(|p| p.col).max().unwrap() + 1;
-  let mut maze = vec![vec!['.'; max_col]; max_row];
-  for wall in problem.walls.iter() {
-      maze[wall.row][wall.col] = '#';
-  }
-  for reachable_point in reachable_points {
-    maze[reachable_point.row][reachable_point.col] = 'O';
-  }
-  for row in maze {
-      println!("{}", row.iter().collect::<String>());
-  }
+fn inverse_directions(penalty_map: &HashMap<Position, i32>) -> HashMap<Position, i32> {
+    let mut inverse_penalty_map = HashMap::new();
+    for (position, penalty) in penalty_map.iter() {
+        inverse_penalty_map.insert(
+            Position {
+                point: position.point.clone(),
+                direction: position.direction.inverse(),
+            },
+            *penalty,
+        );
+    }
+    inverse_penalty_map
 }
 
 fn part_two(problem: &MazeProblem, max_penalty: usize) -> usize {
-    let max_row = problem.walls.iter().map(|p| p.row).max().unwrap() + 1;
-    let max_col = problem.walls.iter().map(|p| p.col).max().unwrap() + 1;
-    let mut reachable_points = HashSet::new();
-    for row in 0..max_row {
-        for col in 0..max_col {
-            let point = Point { row, col };
-            if problem.walls.contains(&point) {
-                continue;
-            }
-            if point == problem.start.point || point == problem.end {
-                // println!("Point {:?} is start or end", point);
-                reachable_points.insert(point);
-                continue;
-            }
-            let start_to_point_outcome =
-                min_cost_to_reach(problem, &problem.start, &point, max_penalty as i32);
-            if start_to_point_outcome.len() == 0 {
-                // println!("Point {:?} is unreachable from start", point);
-                continue;
-            }
-            // Test the reachability from all possible directions
-            for outcome in start_to_point_outcome {
-              let direction = outcome.direction;
-              let new_position = Position {
-                point,
-                direction,
-              };
-              let remaining_cost = max_penalty as i32 - outcome.min_cost as i32;
-              let point_to_end_outcome = min_cost_to_reach(
-                  problem,
-                  &new_position,
-                  &problem.end,
-                  remaining_cost,
-              );
-              // Check if the minimum cost path from point to end makes the total equal to optimal
-              if let Some(min_end_cost) = point_to_end_outcome.iter().map(|o| o.min_cost).min() {
-                if outcome.min_cost + min_end_cost == max_penalty {
-                  reachable_points.insert(point);
-                  break;
-                }
-              }
-            }
+    let reachable_from_start = flood_fill(
+        problem,
+        &vec![problem.start.clone()],
+        None,
+        max_penalty as i32,
+    );
+    // Detect which directions we're allowed to start from in the reverse direction. Check the problem.end point with all 4 possible directions.
+    // If we can reach (row, col) from Up in the first flood_fill, we should be able to reach (row, col) from Down in the reverse flood fill
+    let inverse_penalty_map = inverse_directions(&reachable_from_start);
+    let mut end_positions = Vec::new();
+    let directions = vec![
+        Direction::Up,
+        Direction::Down,
+        Direction::Left,
+        Direction::Right,
+    ];
+    for direction in directions {
+        if reachable_from_start.get(&Position {
+            point: problem.end,
+            direction: direction.clone(),
+        }).is_none() {
+            continue;
         }
+        end_positions.push(Position {
+            point: problem.end,
+            direction: direction.inverse(),
+        });
     }
+    let reachable_from_end = flood_fill(
+        problem,
+        &end_positions,
+        Some(inverse_penalty_map),
+        max_penalty as i32,
+    );
+
+    let reachable_points = reachable_from_end
+        .iter()
+        .map(|(p, _c)| {
+            p.point
+        })
+        .collect();
     render_reachable_points(problem, &reachable_points);
     reachable_points.len()
 }
