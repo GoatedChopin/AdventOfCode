@@ -1,0 +1,122 @@
+use std::{collections::HashSet, fs};
+
+struct Pattern(String);
+
+struct Design(String);
+
+struct Problem {
+    patterns: HashSet<String>,
+    designs: Vec<String>,
+}
+
+fn read_input(file_path: &str) -> Problem {
+    let lines = fs::read_to_string(file_path).expect("Failed to read file");
+    let lines = lines.split("\n").collect::<Vec<&str>>();
+    let patterns = lines[0]
+        .replace(" ", "")
+        .split(",")
+        .map(|s| s.to_string())
+        .collect::<HashSet<String>>();
+    let designs = lines[2..]
+        .to_vec()
+        .iter()
+        .map(|s| s.to_string())
+        .collect::<Vec<String>>();
+    Problem {
+        patterns: patterns,
+        designs: designs,
+    }
+}
+
+fn can_make_design(design: &str, patterns: &HashSet<String>, max_pattern_length: usize) -> bool {
+    if design.is_empty() {
+        return true;
+    }
+    
+    // Dynamic programming: dp[i] = true means we can construct design[0..i]
+    let n = design.len();
+    let mut dp = vec![false; n + 1];
+    dp[0] = true; // Empty prefix is always valid
+  
+    // For each position we can reach, try all possible pattern matches
+    for i in 0..n {
+        if !dp[i] {
+            continue; // Can't reach this position
+        }
+        
+        // Try all possible pattern lengths starting at position i
+        let max_len = std::cmp::min(max_pattern_length, n - i);
+        for len in 1..=max_len {
+            let slice = &design[i..i + len];
+            if patterns.contains(slice) {
+                dp[i + len] = true;
+            }
+        }
+    }
+    
+    dp[n]
+}
+
+fn part_one(problem: &Problem) -> usize {
+    let max_pattern_length = problem
+        .patterns
+        .iter()
+        .map(|pattern| pattern.len())
+        .max()
+        .unwrap();
+    problem
+        .designs
+        .iter()
+        .filter(|design| can_make_design(design.as_str(), &problem.patterns, max_pattern_length))
+        .count()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /*
+      brwrr can be made with a br towel, then a wr towel, and then finally an r towel.
+      bggr can be made with a b towel, two g towels, and then an r towel.
+      gbbr can be made with a gb towel and then a br towel.
+      rrbgbr can be made with r, rb, g, and br.
+      ubwu is impossible.
+      bwurrg can be made with bwu, r, r, and g.
+      brgr can be made with br, g, and r.
+      bbrgwb is impossible.
+    */
+
+    #[test]
+    fn test_can_make_design() {
+        let problem = read_input("test.txt");
+
+        // possible
+        assert!(can_make_design("brwrr", &problem.patterns, 3));
+        assert!(can_make_design("bggr", &problem.patterns, 3));
+        assert!(can_make_design("gbbr", &problem.patterns, 3));
+        assert!(can_make_design("rrbgbr", &problem.patterns, 3));
+        assert!(can_make_design("bwurrg", &problem.patterns, 3));
+        assert!(can_make_design("brgr", &problem.patterns, 3));
+
+        // impossible
+        assert_eq!(
+            can_make_design("ubwu", &problem.patterns, 3),
+            false
+        );
+        assert_eq!(
+            can_make_design("bbrgwb", &problem.patterns, 3),
+            false
+        );
+    }
+
+    #[test]
+    fn test_part_one() {
+        let problem = read_input("test.txt");
+        assert_eq!(part_one(&problem), 6);
+    }
+}
+
+fn main() {
+    let problem = read_input("input.txt");
+    println!("Part one: {}", part_one(&problem));
+}
