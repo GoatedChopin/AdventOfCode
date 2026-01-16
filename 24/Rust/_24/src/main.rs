@@ -268,6 +268,8 @@ fn part_two(circuit: &mut Circuit) -> String {
         }
     }
 
+    // Now we know all the wires that might be crossed from top to bottom. We can try searching over 
+
     "".to_string()
 }
 
