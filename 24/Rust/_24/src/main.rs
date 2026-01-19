@@ -1,10 +1,12 @@
 use std::{
     collections::{HashMap, HashSet},
     fs,
-    ops::BitAndAssign,
 };
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+mod combinatoric;
+use combinatoric::GroupsCombinatoric;
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 struct Register {
     name: [char; 3],
 }
@@ -243,7 +245,7 @@ fn part_two(circuit: &mut Circuit) -> String {
 
     let mut temp_circuit = circuit.clone();
     part_one(&mut temp_circuit);
-    let actual_z_num = get_register_number(circuit, 'z');
+    let actual_z_num = get_register_number(&temp_circuit, 'z');
 
     // Find the z-registers that don't match
     let mut mismatch_registers = expected_z_num
@@ -269,8 +271,37 @@ fn part_two(circuit: &mut Circuit) -> String {
     }
 
     // Now we know all the wires that might be crossed from top to bottom. We can try searching over 
+    let mut solution = None;
+    let mut combinatoric = GroupsCombinatoric::new(chain_of_custody.iter().collect(), vec![2, 2, 2, 2]);
+    while let Some(combination) = combinatoric.next() {
+        let mut temp_circuit = circuit.clone();
+        // Swap each of the wires in the combinatoric 
+        for wire_group in combination.iter() {
+          let wire_one = (*wire_group[0]).clone();
+          let wire_two = (*wire_group[1]).clone();
+          // Swap the wires' outputs in the temp_circuit
+          temp_circuit.wires.iter_mut().for_each(|wire| {
+            if *wire == wire_one {
+              wire.output = wire_two.output;
+            } else if *wire == wire_two {
+              wire.output = wire_one.output;
+            }
+          });
+        }
+        part_one(&mut temp_circuit);
+        if get_register_number(&temp_circuit, 'z') == expected_z_num {
+          solution = Some(combination);
+          break;
+        }
+    }
 
-    "".to_string()
+    if solution.is_none() {
+      return "No solution found".to_string();
+    }
+
+    let mut output_names = solution.unwrap().into_iter().flatten().map(|wire| wire.output.name).collect::<Vec<_>>();
+    output_names.sort();
+    output_names.into_iter().map(|name| name.iter().collect::<String>()).collect::<Vec<String>>().join(",")
 }
 
 #[cfg(test)]
@@ -303,4 +334,6 @@ fn main() {
     let mut circuit = read_input("input.txt");
     let result = part_one(&mut circuit);
     println!("Part one: {}", result);
+    let result = part_two(&mut circuit);
+    println!("Part two: {}", result);
 }
