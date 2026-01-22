@@ -270,9 +270,183 @@ fn part_two(circuit: &mut Circuit) -> String {
         }
     }
 
-    // Backtrack through the 
+    // Backtrack through the circuit, determine the viable values for each register.
+    let mut real_viable_values = HashMap::new();
+    let mut desired_viable_values = HashMap::new();
+    for (register, value) in temp_circuit.registers.iter() {
+        if value.is_some() {
+            real_viable_values.insert(register, HashSet::from([value.unwrap()]));
+        } else {
+            real_viable_values.insert(register, HashSet::from([false, true]));
+        }
+        if register[0] == 'z' {
+            let index = register[1..]
+                .iter()
+                .collect::<String>()
+                .parse::<usize>()
+                .unwrap();
+            let desired_value = expected_z_num[index];
+            desired_viable_values.insert(register, HashSet::from([desired_value]));
+            continue;
+        }
+        desired_viable_values.insert(register, HashSet::from([false, true]));
+    }
+    for wire in temp_circuit.wires.iter() {
+        if wire.output.name[0] != 'z' {
+            continue;
+        }
+        recurse_viable_values(&temp_circuit, wire.output.name, &mut real_viable_values);
+        recurse_viable_values(&temp_circuit, wire.output.name, &mut desired_viable_values);
+    }
 
-    "".to_string()
+    let mut conflicting_registers = HashSet::new();
+    for (register, real_value) in real_viable_values.into_iter() {
+        let desired_value = desired_viable_values.get(register).unwrap();
+        if desired_value.len() > 1 {
+            continue;
+        }
+        if real_value.len() > 1 {
+            continue;
+        }
+        if real_value.iter().next().unwrap() != desired_value.iter().next().unwrap() {
+            conflicting_registers.insert(register);
+        }
+    }
+    for register in conflicting_registers.iter() {
+        println!("Conflicting register: {:?}", register);
+    }
+
+    let mut combinatoric = GroupsCombinatoric::new(
+        circuit
+            .registers
+            .iter()
+            .map(|(register, _)| register)
+            .collect(),
+        vec![2, 2, 2, 2],
+    );
+    while let Some(wire_swaps) = combinatoric.next() {
+        let mut potential_circuit = temp_circuit.clone();
+        let flat_wire_swaps: HashSet<_> = wire_swaps.into_iter().flatten().collect();
+        for wire in potential_circuit.wires.iter_mut() {
+            if flat_wire_swaps.contains(&wire.output.name) {
+                for swap in wire_swaps.iter() {
+                    let left_register = swap[0];
+                    let right_register = swap[1];
+                    if left_register.name == wire.output.name {
+                        wire.output = right_wire;
+                    }
+                }
+            }
+        }
+    }
+    let mut result = conflicting_registers
+        .iter()
+        .map(|register| register.iter().collect::<String>())
+        .collect::<Vec<String>>();
+    result.sort();
+    result.join(",")
+}
+
+fn get_required_values(
+    wire: &Wire,
+    viable_values: &HashMap<&[char; 3], HashSet<bool>>,
+) -> (Option<bool>, Option<bool>) {
+    let output_values = viable_values.get(&wire.output.name).unwrap();
+    if output_values.len() > 1 {
+        return (None, None);
+    }
+    let left_values = viable_values.get(&wire.left.name).unwrap();
+    let right_values = viable_values.get(&wire.right.name).unwrap();
+    let left_value = if left_values.len() == 1 {
+        left_values.iter().next()
+    } else {
+        None
+    };
+    let right_value = if right_values.len() == 1 {
+        right_values.iter().next()
+    } else {
+        None
+    };
+    let required_output_result = output_values.iter().next();
+    if required_output_result.is_none() {
+        return (None, None);
+    }
+    let required_output = required_output_result.unwrap();
+    match wire.operation {
+        Operation::AND => {
+            if !required_output {
+                return (None, None);
+            }
+            return (Some(true), Some(true));
+        }
+        Operation::OR => {
+            if *required_output {
+                return (None, None);
+            }
+            return (Some(false), Some(false));
+        }
+        Operation::XOR => {
+            let mut req = (None, None);
+            if left_value.is_none() && right_value.is_none() {
+                return req;
+            }
+            req.0 = if left_value.is_some() {
+                Some(*left_value.unwrap())
+            } else {
+                None
+            };
+            req.1 = if right_value.is_some() {
+                Some(*right_value.unwrap())
+            } else {
+                None
+            };
+            let non_null = if req.0.is_some() {
+                req.0.unwrap()
+            } else {
+                req.1.unwrap()
+            };
+            match required_output {
+                true => {
+                    return (
+                        Some(req.0.unwrap_or(!non_null)),
+                        Some(!req.1.unwrap_or(!non_null)),
+                    );
+                }
+                false => {
+                    return (
+                        Some(!req.0.unwrap_or(non_null)),
+                        Some(!req.1.unwrap_or(non_null)),
+                    );
+                }
+            }
+        }
+    }
+}
+
+fn recurse_viable_values(
+    circuit: &Circuit,
+    register: [char; 3],
+    viable_values: &mut HashMap<&[char; 3], HashSet<bool>>,
+) {
+    for wire in circuit.wires.iter() {
+        if wire.output.name == register {
+            let (left_value, right_value) = get_required_values(wire, viable_values);
+            if left_value.is_some() {
+                viable_values
+                    .get_mut(&wire.left.name)
+                    .unwrap()
+                    .remove(&!left_value.unwrap());
+                recurse_viable_values(circuit, wire.left.name, viable_values);
+            }
+            if right_value.is_some() {
+                viable_values
+                    .get_mut(&wire.right.name)
+                    .unwrap()
+                    .remove(&!right_value.unwrap());
+                recurse_viable_values(circuit, wire.right.name, viable_values);
+            }
+        }
+    }
 }
 
 #[cfg(test)]
