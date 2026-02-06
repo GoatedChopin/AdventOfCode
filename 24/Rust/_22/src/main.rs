@@ -120,6 +120,9 @@ fn part_two(input: Vec<Buyer>, slice_size: usize) -> isize {
     let mut buyers = input.clone();
     let mut slice_totals = HashMap::new();
     for i in 0..2000 {
+        if i % 10 == 0 {
+          println!("{}", i);
+        }
         for buyer in buyers.iter_mut() {
             *buyer = buyer.next();
             if i > slice_size {

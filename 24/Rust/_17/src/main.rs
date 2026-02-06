@@ -409,91 +409,128 @@ fn part_one(registers: &mut Vec<usize>, program: &[Opcode]) -> String {
         .join(",")
 }
 
-fn part_two(registers: &mut Vec<usize>, program: &[Opcode], stop_at: usize) -> usize {
-    let mut a_register_value = 1; // Start from 1 (lowest positive value)
-    let mut found_match = false;
-    let copy_of_registers = registers.clone();
-    while !found_match && a_register_value <= stop_at {
-        registers.copy_from_slice(&copy_of_registers);
-        registers[Register::A.index()] = a_register_value;
-        let mut instruction_pointer = 0;
-        let mut program_pointer = 0;
-        let mut matched_all = true;
-        
-        while instruction_pointer < program.len() {
-            if instruction_pointer + 1 >= program.len() {
+fn test_a_value(a_value: usize, initial_registers: &[usize], program: &[Opcode]) -> Option<usize> {
+    let mut registers = initial_registers.to_vec();
+    registers[Register::A.index()] = a_value;
+    let mut instruction_pointer = 0;
+    let mut program_pointer = 0;
+    let mut matched_all = true;
+    
+    while instruction_pointer < program.len() {
+        if instruction_pointer + 1 >= program.len() {
+            break;
+        }
+
+        let opcode = &program[instruction_pointer];
+        let raw_operand = program[instruction_pointer + 1].0;
+
+        // Determine if this instruction uses combo or literal operand
+        let operand = match opcode.0 {
+            0 | 2 | 5 | 6 | 7 => {
+                // These use combo operands
+                Opcode::combo_operand(raw_operand, &registers)
+            }
+            1 | 3 => {
+                // These use literal operands
+                raw_operand
+            }
+            4 => {
+                // Operand is ignored
+                raw_operand
+            }
+            _ => raw_operand,
+        };
+
+        let instruction_builder = opcode.instruction();
+        let instruction = instruction_builder(operand);
+        let result = instruction.execute(&mut registers);
+
+        // Check for output
+        if let Some(output_value) = instruction.output() {
+            // If we've already matched all program values, check if there's extra output
+            if program_pointer >= program.len() {
+                matched_all = false;
                 break;
             }
-
-            let opcode = &program[instruction_pointer];
-            let raw_operand = program[instruction_pointer + 1].0;
-
-            // Determine if this instruction uses combo or literal operand
-            let operand = match opcode.0 {
-                0 | 2 | 5 | 6 | 7 => {
-                    // These use combo operands
-                    Opcode::combo_operand(raw_operand, registers)
-                }
-                1 | 3 => {
-                    // These use literal operands
-                    raw_operand
-                }
-                4 => {
-                    // Operand is ignored
-                    raw_operand
-                }
-                _ => raw_operand,
-            };
-
-            let instruction_builder = opcode.instruction();
-            let instruction = instruction_builder(operand);
-            let result = instruction.execute(registers);
-
-            // Check for output
-            if let Some(output_value) = instruction.output() {
-                // If we've already matched all program values, check if there's extra output
-                if program_pointer >= program.len() {
-                    matched_all = false;
-                    break;
-                }
-                
-                // Check if output matches expected program value
-                if program[program_pointer].0 != output_value {
-                    matched_all = false;
-                    break;
-                }
-                
-                program_pointer += 1;
-                
-                // If we've matched all program values, we're done (even if program continues)
-                if program_pointer == program.len() {
-                    break;
-                }
+            
+            // Check if output matches expected program value
+            if program[program_pointer].0 != output_value {
+                matched_all = false;
+                break;
             }
-
-            if result.is_some() {
-                instruction_pointer = result.unwrap();
-            } else {
-                instruction_pointer += 2;
+            
+            program_pointer += 1;
+            
+            // If we've matched all program values, we're done (even if program continues)
+            if program_pointer == program.len() {
+                break;
             }
         }
-        
-        // Check if we matched all program values
-        if matched_all && program_pointer == program.len() {
-            found_match = true;
+
+        if result.is_some() {
+            instruction_pointer = result.unwrap();
         } else {
-            a_register_value += 1;
-            if a_register_value % 100000000 == 0 {
-                println!("Trying a_register_value: {}", a_register_value);
-            }
+            instruction_pointer += 2;
         }
     }
     
-    if !found_match {
-        panic!("No match found up to {}", stop_at);
+    // Check if we matched all program values
+    if matched_all && program_pointer == program.len() {
+        Some(a_value)
+    } else {
+        None
     }
+}
+
+fn part_two(registers: &mut Vec<usize>, program: &[Opcode], stop_at: usize) -> usize {
+    use rayon::prelude::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::Instant;
     
-    a_register_value
+    let initial_registers = registers.clone();
+    let start_time = Instant::now();
+    let items_tested = AtomicUsize::new(0);
+    let last_logged_percent = AtomicUsize::new(0);
+    
+    let result = (1..=stop_at)
+        .into_par_iter()
+        .find_first(|&a_value| {
+            // Increment counter of items tested (approximate, but better than tracking max value)
+            let tested = items_tested.fetch_add(1, Ordering::Relaxed) + 1;
+            
+            // Log progress based on number of items tested, not the value being tested
+            // This gives a more accurate picture of actual progress
+            let percent = (tested * 100) / stop_at.max(1);
+            let last_percent = last_logged_percent.load(Ordering::Relaxed);
+            
+            // Log when we cross a new percentage threshold
+            if percent > last_percent {
+                // Try to update last_logged_percent (only one thread will succeed)
+                if last_logged_percent.compare_exchange(
+                    last_percent,
+                    percent,
+                    Ordering::Relaxed,
+                    Ordering::Relaxed,
+                ).is_ok() {
+                    let elapsed = start_time.elapsed();
+                    println!(
+                        "[{:.2}s] Progress: {}% (tested {} values, currently testing {})",
+                        elapsed.as_secs_f64(),
+                        percent,
+                        tested,
+                        a_value
+                    );
+                }
+            }
+            
+            test_a_value(a_value, &initial_registers, program).is_some()
+        });
+    
+    let elapsed = start_time.elapsed();
+    let final_tested = items_tested.load(Ordering::Relaxed);
+    println!("Total search time: {:.2}s (tested {} values)", elapsed.as_secs_f64(), final_tested);
+    
+    result.unwrap_or_else(|| panic!("No match found up to {}", stop_at))
 }
 
 #[cfg(test)]
@@ -533,5 +570,5 @@ mod tests {
 fn main() {
     let (mut registers, program) = read_input("input.txt");
     println!("Part one: {}", part_one(&mut registers, &program));
-    println!("Part two: {}", part_two(&mut registers, &program, 1000000000000));
+    println!("Part two: {}", part_two(&mut registers, &program, 1_000_000_000_000));
 }

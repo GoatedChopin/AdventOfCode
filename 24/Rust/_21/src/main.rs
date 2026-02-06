@@ -56,11 +56,9 @@ impl Direction {
 
 struct Path {
     path: String,
-    turns: i32,
     steps: i32,
     current_point: Point,
     start_char: char,
-    direction: Option<Direction>,
 }
 
 impl PartialEq for Path {
@@ -79,27 +77,28 @@ impl PartialOrd for Path {
 
 impl Ord for Path {
     fn cmp(&self, other: &Self) -> Ordering {
-        // Reverse comparisons: fewer turns and shorter paths get higher priority in max-heap
-        let turns_cmp = other.turns.cmp(&self.turns);
-        if turns_cmp != Ordering::Equal {
-            return turns_cmp;
-        }
-        other.path.len().cmp(&self.path.len())
+        // Reverse comparison: shorter paths get higher priority in max-heap
+        other.steps.cmp(&self.steps)
     }
 }
 
 impl Pinpad {
     fn new_tenkey() -> Self {
         let mut map = HashMap::new();
-        map.insert(Point { row: 0, col: 0 }, '1');
-        map.insert(Point { row: 0, col: 1 }, '2');
-        map.insert(Point { row: 0, col: 2 }, '3');
+        // AoC numpad layout:
+        // 7 8 9
+        // 4 5 6
+        // 1 2 3
+        // X 0 A  (X is empty/invalid at row 3, col 0)
+        map.insert(Point { row: 0, col: 0 }, '7');
+        map.insert(Point { row: 0, col: 1 }, '8');
+        map.insert(Point { row: 0, col: 2 }, '9');
         map.insert(Point { row: 1, col: 0 }, '4');
         map.insert(Point { row: 1, col: 1 }, '5');
         map.insert(Point { row: 1, col: 2 }, '6');
-        map.insert(Point { row: 2, col: 0 }, '7');
-        map.insert(Point { row: 2, col: 1 }, '8');
-        map.insert(Point { row: 2, col: 2 }, '9');
+        map.insert(Point { row: 2, col: 0 }, '1');
+        map.insert(Point { row: 2, col: 1 }, '2');
+        map.insert(Point { row: 2, col: 2 }, '3');
         map.insert(Point { row: 3, col: 1 }, '0');
         map.insert(Point { row: 3, col: 2 }, 'A');
 
@@ -128,23 +127,19 @@ impl Pinpad {
         let deltas = [(0, 1), (1, 0), (0, -1), (-1, 0)];
         for (point, start_char) in self.map.iter() {
             let mut queue = BinaryHeap::new();
-            // Track best cost (turns, steps) to reach each point
-            let mut best_cost: HashMap<Point, (i32, i32)> = HashMap::new();
+            // Track minimum steps to reach each point (we want ALL shortest paths)
+            let mut min_steps: HashMap<Point, i32> = HashMap::new();
             queue.push(Path {
                 path: String::new(),
-                turns: 0,
                 steps: 0,
                 start_char: *start_char,
                 current_point: *point,
-                direction: None,
             });
             while let Some(Path {
                 path,
-                turns,
                 steps,
                 current_point,
                 start_char,
-                direction,
             }) = queue.pop()
             {
                 let key = (start_char, *self.map.get(&current_point).unwrap());
@@ -176,12 +171,6 @@ impl Pinpad {
                         continue;
                     }
                     let new_direction = Direction::from_delta(drow, dcol);
-                    let new_turns = turns
-                        + if direction.is_some() && direction.unwrap() != new_direction {
-                            1
-                        } else {
-                            0
-                        };
                     let new_steps = steps + 1;
 
                     // Only explore if this could be an optimal or equivalent path
@@ -197,11 +186,9 @@ impl Pinpad {
                     new_string.push(new_direction.to_char());
                     let new_path = Path {
                         path: new_string,
-                        turns: new_turns,
                         steps: new_steps,
                         start_char,
                         current_point: new_point,
-                        direction: Some(new_direction),
                     };
                     queue.push(new_path);
                 }
@@ -234,7 +221,8 @@ fn read_input(filename: &str) -> Vec<String> {
 }
 
 fn minimum_instructions(passcode: &str, chain_of_custodcol: Vec<Pinpad>) -> String {
-    let mut min_paths = HashMap::new();
+    // Pre-compute all min paths for each pinpad orientation
+    let mut min_paths_cache: HashMap<Orientation, HashMap<(char, char), Vec<String>>> = HashMap::new();
     for pinpad in chain_of_custodcol.iter() {
         if min_paths.contains_key(&pinpad.orientation) {
             continue;
