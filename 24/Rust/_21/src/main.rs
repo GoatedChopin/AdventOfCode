@@ -148,20 +148,25 @@ impl Pinpad {
             }) = queue.pop()
             {
                 let key = (start_char, *self.map.get(&current_point).unwrap());
-                
+
                 // Check if we've seen this point with a better cost
                 if let Some(&(best_turns, best_steps)) = best_cost.get(&current_point) {
                     if turns > best_turns || (turns == best_turns && steps > best_steps) {
                         continue; // Skip worse paths
                     }
                 }
-                
+
                 // Record or update best cost for this point
                 best_cost.insert(current_point, (turns, steps));
-                
+
                 // Add this path to the collection
-                min_paths.entry(key).or_insert_with(Vec::new).push(path.clone());
-                
+                min_paths
+                    .entry(key)
+                    .or_insert_with(Vec::new)
+                    .push(path.clone());
+
+                min_paths.entry(key).and_modify(|paths| paths.sort_by_key(|path| path_priority(path)));
+
                 for (drow, dcol) in deltas.iter() {
                     let new_point = Point {
                         row: current_point.row + *drow,
@@ -178,14 +183,16 @@ impl Pinpad {
                             0
                         };
                     let new_steps = steps + 1;
-                    
+
                     // Only explore if this could be an optimal or equivalent path
                     if let Some(&(best_turns, best_steps)) = best_cost.get(&new_point) {
-                        if new_turns > best_turns || (new_turns == best_turns && new_steps > best_steps) {
+                        if new_turns > best_turns
+                            || (new_turns == best_turns && new_steps > best_steps)
+                        {
                             continue;
                         }
                     }
-                    
+
                     let mut new_string = path.clone();
                     new_string.push(new_direction.to_char());
                     let new_path = Path {
@@ -204,6 +211,23 @@ impl Pinpad {
     }
 }
 
+fn path_priority(path: &str) -> i32 {
+  // Prioritize paths that move left and down first, right and up last.
+  let mut priority = 0;
+  let mut index= 1;
+  for char in path.chars().rev() {
+    match char {
+      '<' => priority += 1 * index,
+      'v' => priority += 2 * index,
+      '^' => priority += 3 * index,
+      '>' => priority += 4 * index,
+      _ => {}
+    }
+    index = if index == 1 { 10 } else { index + 10 };
+  }
+  priority
+}
+
 fn read_input(filename: &str) -> Vec<String> {
     let input = fs::read_to_string(filename).expect(&format!("Failed to read {}", filename));
     input.lines().map(|line| line.to_string()).collect()
@@ -212,28 +236,51 @@ fn read_input(filename: &str) -> Vec<String> {
 fn minimum_instructions(passcode: &str, chain_of_custodcol: Vec<Pinpad>) -> String {
     let mut min_paths = HashMap::new();
     for pinpad in chain_of_custodcol.iter() {
-      if min_paths.contains_key(&pinpad.orientation) {
-        continue;
-      }
-      min_paths.insert(pinpad.orientation, pinpad.generate_min_paths());
+        if min_paths.contains_key(&pinpad.orientation) {
+            continue;
+        }
+        min_paths.insert(pinpad.orientation, pinpad.generate_min_paths());
     }
     let mut layers = Vec::new();
     layers.push(passcode.chars().into_iter().collect::<Vec<_>>());
     for pinpad in chain_of_custodcol.iter() {
-      let current_layer = layers[layers.len() - 1].clone();
-      // Take each pair of chars in current_layer like current_layer[i] <-> current_layer[i + 1]
-      // For now, take the first equivalent path from each set
-      let new_layer = current_layer.windows(2).map(|pair| {
-          let paths = min_paths.get(&pinpad.orientation).unwrap().get(&(pair[0], pair[1])).unwrap();
-          paths[0].clone() + "A"
-      }).collect::<Vec<_>>();
-      layers.push(new_layer.iter().fold(Vec::new(), |mut v, x| {v.extend(x.chars()); v}));
+        let current_layer = layers[layers.len() - 1].clone();
+        // Take each pair of chars in current_layer like current_layer[i] <-> current_layer[i + 1]
+        // For now, take the first equivalent path from each set
+        let new_layer = current_layer
+            .windows(2)
+            .map(|pair| {
+                let paths = min_paths
+                    .get(&pinpad.orientation)
+                    .unwrap()
+                    .get(&(pair[0], pair[1]))
+                    .unwrap();
+                paths[0].clone() + "A"
+            })
+            .collect::<Vec<_>>();
+        layers.push(new_layer.iter().fold(Vec::new(), |mut v, x| {
+            v.extend(x.chars());
+            v
+        }));
     }
     layers[layers.len() - 1].iter().collect::<String>()
 }
 
 fn part_one(passcodes: Vec<String>) -> String {
-  passcodes.iter().map(|passcode| minimum_instructions(passcode, vec![Pinpad::new_tenkey(), Pinpad::new_arrowkey(), Pinpad::new_tenkey()])).collect::<Vec<_>>().join("\n")
+    passcodes
+        .iter()
+        .map(|passcode| {
+            minimum_instructions(
+                passcode,
+                vec![
+                    Pinpad::new_tenkey(),
+                    Pinpad::new_arrowkey(),
+                    Pinpad::new_tenkey(),
+                ],
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 #[cfg(test)]
@@ -242,24 +289,22 @@ mod tests {
 
     #[test]
     fn test_windows() {
-      let i = [1, 2, 3, 4]
-        .windows(2)
-        .map(|pair| (pair[0], pair[1]));
-      println!("{:?}", i.collect::<Vec<_>>());
+        let i = [1, 2, 3, 4].windows(2).map(|pair| (pair[0], pair[1]));
+        println!("{:?}", i.collect::<Vec<_>>());
     }
 
     #[test]
     fn test_generate_min_paths() {
-      let pinpad = Pinpad::new_tenkey();
-      let min_paths = pinpad.generate_min_paths();
-      println!("{:?}", min_paths);
+        let pinpad = Pinpad::new_tenkey();
+        let min_paths = pinpad.generate_min_paths();
+        println!("{:?}", min_paths);
     }
 
     #[test]
     fn test_generate_min_paths_arrowkey() {
-      let pinpad = Pinpad::new_arrowkey();
-      let min_paths = pinpad.generate_min_paths();
-      println!("{:?}", min_paths);
+        let pinpad = Pinpad::new_arrowkey();
+        let min_paths = pinpad.generate_min_paths();
+        println!("{:?}", min_paths);
     }
 
     #[test]
@@ -272,7 +317,15 @@ mod tests {
           379A: <v<A>>^AvA^A<vA<AA>>^AAvA<^A>AAvA^A<vA>^AA<A>A<v<A>A>^AAAvA<^A>A
         */
         assert_eq!(
-            minimum_instructions("029A", vec![Pinpad::new_tenkey(), Pinpad::new_arrowkey(), Pinpad::new_arrowkey(), Pinpad::new_arrowkey()]),
+            minimum_instructions(
+                "029A",
+                vec![
+                    Pinpad::new_tenkey(),
+                    Pinpad::new_arrowkey(),
+                    Pinpad::new_arrowkey(),
+                    Pinpad::new_arrowkey()
+                ]
+            ),
             "<vA<AA>>^AvAA<^A>A<v<A>>^AvA^A<vA>^A<v<A>^A>AAvA^A<v<A>A>^AAAvA<^A>A"
         );
     }
