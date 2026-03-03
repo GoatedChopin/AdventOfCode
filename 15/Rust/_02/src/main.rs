@@ -14,15 +14,17 @@ impl BoxDims {
 
     fn areas(&self) -> (u32, u32, u32) {
         let BoxDims(l, w, h) = *self;
-        (l*w, w*h, h*l)
+        (l * w, w * h, h * l)
     }
 
     fn perimeters(&self) -> (u32, u32, u32) {
         let BoxDims(l, w, h) = *self;
-        (2*(l+w), 2*(w+h), 2*(h+l))
+        (2 * (l + w), 2 * (w + h), 2 * (h + l))
     }
 
-    fn volume(&self) -> u32 { self.0 * self.1 * self.2 }
+    fn volume(&self) -> u32 {
+        self.0 * self.1 * self.2
+    }
 }
 
 fn parse_input(input: &str) -> Vec<BoxDims> {
@@ -34,20 +36,26 @@ fn parse_input(input: &str) -> Vec<BoxDims> {
 }
 
 fn part_one(boxes: &[BoxDims]) -> u32 {
-    boxes.iter().map(|b| {
-        let (a1,a2,a3) = b.areas();
-        let surface = 2*a1 + 2*a2 + 2*a3;
-        let slack = a1.min(a2).min(a3);
-        surface + slack
-    }).sum()
+    boxes
+        .iter()
+        .map(|b| {
+            let (a1, a2, a3) = b.areas();
+            let surface = 2 * a1 + 2 * a2 + 2 * a3;
+            let slack = a1.min(a2).min(a3);
+            surface + slack
+        })
+        .sum()
 }
 
 fn part_two(boxes: &[BoxDims]) -> u32 {
-    boxes.iter().map(|b| {
-        let (p1,p2,p3) = b.perimeters();
-        let ribbon = p1.min(p2).min(p3);
-        ribbon + b.volume()
-    }).sum()
+    boxes
+        .iter()
+        .map(|b| {
+            let (p1, p2, p3) = b.perimeters();
+            let ribbon = p1.min(p2).min(p3);
+            ribbon + b.volume()
+        })
+        .sum()
 }
 
 #[cfg(test)]
