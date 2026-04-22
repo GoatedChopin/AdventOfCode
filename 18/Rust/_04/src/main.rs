@@ -21,7 +21,7 @@ fn minute_counts_between(start: &NaiveDateTime, end: &NaiveDateTime) -> HashMap<
         current_minute = current.minute();
     }
 
-    let mut last = start.clone();
+    let mut last = end.clone();
     let mut last_minute = last.minute();
     while last_minute != 0 && last > current {
         let min = counts.get_mut(&last_minute);
