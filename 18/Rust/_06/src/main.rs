@@ -1,4 +1,5 @@
 use std::{
+    array::IntoIter,
     collections::{HashMap, HashSet, VecDeque},
     fs,
 };
@@ -9,16 +10,11 @@ const CARDINAL_DIRECTIONS: [(isize, isize); 4] = [(0, 1), (1, 0), (0, -1), (-1, 
 struct Coord {
     row: isize,
     col: isize,
-    unbounded: bool,
 }
 
 impl Coord {
     fn new(row: isize, col: isize) -> Self {
-        Self {
-            row,
-            col,
-            unbounded: false,
-        }
+        Self { row, col }
     }
 
     fn manhattan_distance(&self, other: Coord) -> isize {
@@ -51,11 +47,28 @@ struct BoundingBox {
 }
 
 impl BoundingBox {
-    fn contains(&self, c: &Coord) -> bool {
-        self.lower.row <= c.row
-            && self.lower.col <= c.col
-            && self.upper.row >= c.row
-            && self.upper.col >= c.col
+    fn iter(&self) -> impl Iterator<Item = Coord> {
+        let (lo_row, hi_row) = (self.lower.row, self.upper.row);
+        let (lo_col, hi_col) = (self.lower.col, self.upper.col);
+        (lo_row..=hi_row)
+            .flat_map(move |row| (lo_col..=hi_col).map(move |col| Coord::new(row, col)))
+    }
+
+    fn iter_edges(&self) -> impl Iterator<Item = Coord> {
+        let (lo_row, hi_row) = (self.lower.row, self.upper.row);
+        let (lo_col, hi_col) = (self.lower.col, self.upper.col);
+        let left = (lo_row..=hi_row).map(move |row| Coord::new(row, lo_col));
+        let right = (lo_row..=hi_row).map(move |row| Coord::new(row, hi_col));
+        let top = (lo_col..=hi_col).map(move |col| Coord::new(lo_row, col));
+        let bottom = (lo_col..=hi_col).map(move |col| Coord::new(hi_row, col));
+        left.chain(right).chain(top).chain(bottom)
+    }
+
+    fn expand(&self, by: isize) -> Self {
+        BoundingBox {
+            lower: Coord::new(self.lower.row - (by / 2), self.lower.col - (by / 2)),
+            upper: Coord::new(self.upper.row + (by / 2), self.upper.col + (by / 2)),
+        }
     }
 }
 
@@ -65,11 +78,10 @@ fn read_input(input_file: &str) -> Vec<Coord> {
         .lines()
         .map(|line| {
             let parts: Vec<&str> = line.split(", ").collect();
-            Coord {
-                row: parts[0].parse().expect("Bad isize value"),
-                col: parts[1].parse().expect("Bad isize value"),
-                unbounded: false,
-            }
+            Coord::new(
+                parts[0].parse().expect("Bad isize value"),
+                parts[1].parse().expect("Bad isize value"),
+            )
         })
         .collect();
 
@@ -80,12 +92,10 @@ fn get_bounding_box(input: &Vec<Coord>) -> BoundingBox {
     let mut lower = Coord {
         row: isize::MAX,
         col: isize::MAX,
-        unbounded: false,
     };
     let mut upper = Coord {
         row: isize::MIN,
         col: isize::MIN,
-        unbounded: false,
     };
     input.iter().for_each(|c| {
         lower.row = std::cmp::min(lower.row, c.row);
@@ -96,101 +106,83 @@ fn get_bounding_box(input: &Vec<Coord>) -> BoundingBox {
     BoundingBox { lower, upper }
 }
 
-fn flood_fill(
-    c: &mut Coord,
-    bounding_box: &BoundingBox,
-    ownership: &mut HashMap<Coord, Coord>,
-    shortest_paths: &mut HashMap<Coord, isize>,
-) {
-    let mut queue = VecDeque::from([(*c, 0)]);
-    let mut visited = HashSet::from([*c]);
-    ownership.insert(*c, *c);
-    shortest_paths.insert(*c, 0);
-    while queue.len() > 0 {
-        let (current, steps) = queue.pop_back().expect("Strange queue behavior");
-        let neighbors = current.get_neighbors();
-        for neighbor in neighbors.into_iter() {
-            if !bounding_box.contains(&neighbor) {
-                c.unbounded = true;
-                continue;
-            }
-            if visited.contains(&neighbor) {
-                continue;
-            }
-            visited.insert(neighbor);
-            let prev_best = shortest_paths.get(&neighbor);
-            match prev_best {
-                Some(prev_steps) => {
-                    if *prev_steps == steps {
-                        ownership.remove(&neighbor);
-                    } else if *prev_steps < steps {
-                        continue;
-                    } else if *prev_steps > steps {
-                        ownership.insert(neighbor, *c);
-                        shortest_paths.insert(neighbor, steps);
-                    }
+fn part_one(input: Vec<Coord>) -> usize {
+    let mut ownership: HashMap<Coord, HashSet<Coord>> = HashMap::new();
+    let bounding_box = get_bounding_box(&input);
+    bounding_box.iter().for_each(|c| {
+        let mut distance_counts: HashMap<isize, HashSet<Coord>> = HashMap::new();
+        input.iter().for_each(|p| {
+            let distance = p.manhattan_distance(c);
+            match distance_counts.get_mut(&distance) {
+                Some(val) => {
+                    val.insert(*p);
                 }
                 None => {
-                    shortest_paths.insert(neighbor, steps);
-                    ownership.insert(neighbor, *c);
+                    distance_counts.insert(distance, HashSet::from([*p]));
                 }
-            }
-            queue.push_front((neighbor, steps + 1));
-        }
-    }
-}
-
-fn part_one(input: Vec<Coord>) -> usize {
-    let mut input = input;
-    let bounding_box = get_bounding_box(&input);
-    let mut ownership: HashMap<Coord, Coord> = HashMap::new();
-    let mut reachable: HashMap<Coord, HashSet<Coord>> = HashMap::new();
-    let mut shortest_paths: HashMap<Coord, isize> = HashMap::new();
-
-    input.iter_mut().for_each(|c| {
-        flood_fill(c, &bounding_box, &mut ownership, &mut shortest_paths);
-    });
-
-    ownership.iter().for_each(|(n, c)| {
-        let c_reachable = reachable.get_mut(c);
-        match c_reachable {
-            Some(r) => {
-                r.insert(*n);
-            }
-            None => {
-                reachable.insert(*c, HashSet::from([*n]));
-            }
-        }
-    });
-
-    let max_reachable = reachable
-        .iter()
-        .fold(Coord::new(0, 0), |acc, (coord, c_reachable)| {
-            if coord.unbounded {
-                return acc;
-            }
-            let current_best = reachable.get(&acc);
-            let cb_reachable = match current_best {
-                Some(cb) => cb.len(),
-                None => 0,
             };
-            match cb_reachable > c_reachable.len() {
-                true => acc,
-                false => *coord,
-            }
         });
 
-    println!("Best is {:?}", max_reachable);
+        let closest_point = match distance_counts.keys().min() {
+            Some(min_distance) => match distance_counts.get(min_distance) {
+                Some(fp) if fp.len() == 1 => fp.iter().next(),
+                _ => None,
+            },
+            None => None,
+        };
 
-    reachable
-        .get(&max_reachable)
-        .unwrap_or(&HashSet::new())
-        .len()
+        match closest_point {
+            Some(cp) => {
+                if !ownership.contains_key(cp) {
+                    ownership.insert(*cp, HashSet::new());
+                }
+                ownership
+                    .get_mut(cp)
+                    .expect("ownership must exist here")
+                    .insert(c);
+            }
+            None => {}
+        }
+    });
+
+    bounding_box.iter_edges().for_each(|c| {
+        // If any of these edges are in the hashset of an input point, this is an unbounded point and can't be part of the answer.
+        ownership.iter_mut().for_each(|(key, val)| {
+            if val.contains(&c) {
+                val.drain();
+            }
+        });
+    });
+
+    ownership.iter().fold(0, |acc, (key, val)| {
+        if val.len() > acc {
+            println!("New best from {:?}: {}", key, val.len());
+            return val.len();
+        }
+        return acc;
+    })
+}
+
+fn part_two(input: Vec<Coord>) -> usize {
+    let budget = 10000;
+    let bounding_box = get_bounding_box(&input);
+    let expanded_box = bounding_box.expand(budget / input.len() as isize);
+    expanded_box
+        .iter()
+        .filter(|c| {
+            input
+                .iter()
+                .map(|p| p.manhattan_distance(*c))
+                .sum::<isize>()
+                < budget
+        })
+        .count()
 }
 
 fn main() {
     let input = read_input("input.txt");
-    println!("Part one: {}", part_one(input));
+    println!("Part one: {}", part_one(input.clone()));
+    println!("Part two: {}", part_two(input));
 }
 
 #[cfg(test)]
