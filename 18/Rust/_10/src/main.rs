@@ -71,16 +71,36 @@ impl Grid {
   }
 }
 
-fn read_input(filename: &str) -> Vec<String> {
+fn read_input(filename: &str) -> Grid {
     let input = fs::read_to_string(filename).unwrap();
-    input.lines().map(|line| line.to_string()).collect()
+    let lines = input.lines().map(|line| line.to_string()).collect::<Vec<String>>();
+    let lights = lines.iter().map(|line| {
+      let filtered = line.replace("position=<", "").replace("> velocity=<", "").replace(">", "").replace(",", "");
+      let parts = filtered.split_whitespace().collect::<Vec<&str>>();
+      let position_x = parts[0].parse().unwrap();
+      let position_y = parts[1].parse().unwrap();
+      let velocity_x = parts[2].parse().unwrap();
+      let velocity_y = parts[3].parse().unwrap();
+      Light::new(V2::new(position_x, position_y), V2::new(velocity_x, velocity_y))
+    }).collect();
+    Grid::new(lights)
 }
 
-fn part_one(input: &str) -> String {
-
+fn part_one(grid: Grid) -> usize {
+  let mut grid = grid;
+  let mut best_step = 0;
+  for i in 0..100000 {
+    grid = grid.step();
+    grid.print();
+  }
+  grid.print();
+  "".to_string()
+}
 
 fn main() {
-    println!("Hello, world!");
+    let grid = read_input("input.txt");
+    let result = part_one(grid);
+    println!("Result: {}", result);
 }
 
 #[cfg(test)]
@@ -90,6 +110,6 @@ mod tests {
   #[test]
   fn test_read_input() {
     let input = read_input("test.txt");
-    assert_eq!(input.len(), 31);
+    assert_eq!(part_one(input), 31);
   }
 }
