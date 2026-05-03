@@ -90,6 +90,7 @@ impl Grid {
 }
 
 fn read_input(filename: &str) -> Grid {
+fn read_input(filename: &str) -> Grid {
     let input = fs::read_to_string(filename).unwrap();
     let lines: Vec<String> = input
         .lines()
