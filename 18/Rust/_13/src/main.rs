@@ -386,8 +386,26 @@ fn carts_move(
     }
 }
 
-fn carts_crash(mut carts: Query<(&mut Cart, &Transform)>) {
-    // for (mut cart, mut transform) in &mut carts {}
+fn carts_crash(mut carts: Query<(Entity, &mut Cart)>) {
+    let mut occupied: HashMap<IVec2, Vec<Entity>> = HashMap::new();
+    for (entity, cart) in &mut carts {
+        if cart.crashed {
+            continue;
+        }
+        occupied.entry(cart.position).or_default().push(entity);
+    }
+    for (pos, entities) in occupied {
+        if entities.len() <= 1 {
+            continue;
+        }
+        println!("{:?} carts crashed at {:?}", entities.len(), pos);
+        for entity in entities {
+            if let Ok((_, mut cart)) = carts.get_mut(entity) {
+                cart.crashed = true;
+                cart.speed = 0.0;
+            }
+        }
+    }
 }
 
 fn main() {
