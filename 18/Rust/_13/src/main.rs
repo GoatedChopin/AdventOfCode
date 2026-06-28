@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use bevy::ecs::message::MessageReader;
+use bevy::input::mouse::MouseWheel;
 use bevy::prelude::*;
 
 const TILE_SIZE: f32 = 16.0;
@@ -408,11 +410,53 @@ fn carts_crash(mut carts: Query<(Entity, &mut Cart)>) {
     }
 }
 
+fn camera_control(
+    time: Res<Time>,
+    keys: Res<ButtonInput<KeyCode>>,
+    mut scroll: MessageReader<MouseWheel>,
+    mut cam: Single<(&mut Transform, &mut Projection), With<Camera2d>>,
+) {
+    let (transform, projection) = &mut *cam;
+
+    // --- pan: arrow keys / WASD ---
+    let mut dir = Vec2::ZERO;
+    if keys.any_pressed([KeyCode::ArrowUp, KeyCode::KeyW]) {
+        dir.y += 1.0;
+    }
+    if keys.any_pressed([KeyCode::ArrowDown, KeyCode::KeyS]) {
+        dir.y -= 1.0;
+    }
+    if keys.any_pressed([KeyCode::ArrowLeft, KeyCode::KeyA]) {
+        dir.x -= 1.0;
+    }
+    if keys.any_pressed([KeyCode::ArrowRight, KeyCode::KeyD]) {
+        dir.x += 1.0;
+    }
+
+    if let Projection::Orthographic(ortho) = &mut **projection {
+        // pan speed scales with zoom so it feels constant on screen
+        let pan_speed = 400.0 * ortho.scale;
+        transform.translation +=
+            (dir.normalize_or_zero() * pan_speed * time.delta_secs()).extend(0.0);
+
+        // --- zoom: mouse wheel ---
+        let mut scroll_amount = 0.0;
+        for ev in scroll.read() {
+            scroll_amount += ev.y;
+        }
+        if scroll_amount != 0.0 {
+            // multiplicative zoom feels natural; clamp so you can't invert or fly away
+            ortho.scale = (ortho.scale * (1.0 - scroll_amount * 0.1)).clamp(0.1, 10.0);
+        }
+    }
+}
+
 fn main() {
     // let input = read_input("input.txt");
     App::new()
         .add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest()))
         .add_systems(Startup, setup)
+        .add_systems(Update, camera_control)
         .add_systems(Update, (carts_move, carts_crash))
         .run();
 }
