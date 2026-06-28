@@ -91,11 +91,19 @@ impl Cart {
             (_, RailFlavor::Vertical) => self.direction,
             (_, RailFlavor::Crossroad) => {
                 let direction = match self.last_choice {
-                    Direction::Right => self.direction.left(),
-                    Direction::Left => self.direction,
-                    _ => self.direction.right(),
+                    Direction::Right => {
+                        self.last_choice = Direction::Left;
+                        return self.direction.left();
+                    }
+                    Direction::Left => {
+                        self.last_choice = Direction::Down;
+                        self.direction
+                    }
+                    _ => {
+                        self.last_choice = Direction::Right;
+                        return self.direction.right();
+                    }
                 };
-                self.last_choice = direction;
                 return direction;
             }
             (Direction::Up, RailFlavor::TLCorner) => Direction::Right,
