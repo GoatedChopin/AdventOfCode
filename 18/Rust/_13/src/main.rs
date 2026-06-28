@@ -4,19 +4,14 @@ use bevy::ecs::message::MessageReader;
 use bevy::input::mouse::MouseWheel;
 use bevy::prelude::*;
 
+mod terrain;
+
 const TILE_SIZE: f32 = 16.0;
 const CART_TILESET_PATH: &str = "tileset_cart.png";
 const RAIL_TILESET_PATH: &str = "tileset_rails.png";
-const SHEET_COLS: u32 = 1; // TODO from image
-const SHEET_ROWS: u32 = 1; // TODO from image
 
-const IDX_HORIZONTAL: usize = 0; // TODO
-const IDX_VERTICAL: usize = 0; // TODO
-const IDX_TLCORNER: usize = 0; // '/'  TODO
-const IDX_TRCORNER: usize = 0; // '\'  TODO
-const IDX_BLCORNER: usize = 0;
-const IDX_BRCORNER: usize = 0;
-const IDX_CROSSROAD: usize = 0; // '+'  TODO
+#[derive(Component, Clone, Copy, Debug)]
+struct Speed(f32);
 
 #[derive(Clone, Copy, Debug)]
 enum Direction {
@@ -318,6 +313,7 @@ fn setup(
         None,
     ));
 
+    commands.spawn(Speed(1.0));
     let map = read_input("input.txt");
     let center_tile = IVec2::new(
         (map.bounds.min_x + map.bounds.max_x) / 2,
@@ -328,6 +324,8 @@ fn setup(
         Camera2d::default(),
         Transform::from_xyz(center.x, center.y, 999.0),
     ));
+
+    terrain::setup(&map.bounds, &mut commands, assets, layouts);
 
     // rails -> resource lookup table
     let mut rails = HashMap::new();
@@ -343,7 +341,7 @@ fn setup(
                     index: r.flavor.to_tile_index(),
                 },
             ),
-            Transform::from_translation(world.extend(0.0)),
+            Transform::from_translation(world.extend(3.0)),
         ));
     }
     commands.insert_resource(RailGrid {
@@ -362,7 +360,7 @@ fn setup(
                     index: cart.to_tile_index(),
                 },
             ),
-            Transform::from_translation(world.extend(1.0)),
+            Transform::from_translation(world.extend(5.0)),
             cart,
         ));
     }
@@ -371,10 +369,11 @@ fn setup(
 fn carts_move(
     time: Res<Time>,
     grid: Res<RailGrid>,
+    global_speed: Single<&Speed, With<Speed>>,
     mut carts: Query<(&mut Cart, &mut Transform, &mut Sprite)>,
 ) {
     for (mut cart, mut transform, mut sprite) in &mut carts {
-        cart.progress += cart.speed * time.delta_secs();
+        cart.progress += cart.speed * time.delta_secs() * global_speed.0;
         if cart.progress >= 1.0 {
             cart.progress -= 1.0;
             let offset = cart.direction.to_offset();
@@ -392,7 +391,7 @@ fn carts_move(
         }
         let a = tile_to_world(cart.position);
         let b = tile_to_world(cart.position + cart.direction.to_offset());
-        transform.translation = a.lerp(b, cart.progress).extend(1.0);
+        transform.translation = a.lerp(b, cart.progress).extend(5.0);
     }
 }
 
@@ -404,6 +403,16 @@ fn carts_crash(mut carts: Query<(Entity, &mut Cart)>) {
         }
         occupied.entry(cart.position).or_default().push(entity);
     }
+
+    if occupied.len() == 1 {
+        let last_cart: Vec<IVec2> = occupied
+            .iter()
+            .map(|(position, _cart)| *position)
+            .take(1)
+            .collect();
+        println!("Last cart is located at {:?}", last_cart[0]);
+    }
+
     for (pos, entities) in occupied {
         if entities.len() <= 1 {
             continue;
@@ -459,12 +468,29 @@ fn camera_control(
     }
 }
 
+fn speed_control(keys: Res<ButtonInput<KeyCode>>, mut speed: Single<&mut Speed, With<Speed>>) {
+    let mut speed_delta = 0.0;
+    if keys.any_pressed([KeyCode::KeyQ]) {
+        speed_delta -= 1.0;
+    }
+    if keys.any_pressed([KeyCode::KeyE]) {
+        speed_delta += 1.0;
+    }
+    if speed_delta == 0.0 {
+        return;
+    }
+    let new_speed = (speed.0 + speed_delta).clamp(0.0, 100.0);
+    println!("new_speed is {:?}", new_speed);
+    speed.0 = new_speed;
+}
+
 fn main() {
     // let input = read_input("input.txt");
     App::new()
         .add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest()))
         .add_systems(Startup, setup)
         .add_systems(Update, camera_control)
+        .add_systems(Update, speed_control)
         .add_systems(Update, (carts_move, carts_crash))
         .run();
 }
