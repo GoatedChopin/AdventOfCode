@@ -404,25 +404,38 @@ fn carts_crash(mut carts: Query<(Entity, &mut Cart)>) {
         occupied.entry(cart.position).or_default().push(entity);
     }
 
-    if occupied.len() == 1 {
-        let last_cart: Vec<IVec2> = occupied
-            .iter()
-            .map(|(position, _cart)| *position)
-            .take(1)
-            .collect();
-        println!("Last cart is located at {:?}", last_cart[0]);
-    }
-
+    let mut total_entities = 0;
+    let mut crashed_entities = 0;
+    let mut last_seen_uncrashed_position = None;
+    let mut last_seen_uncrashed_cart = None;
     for (pos, entities) in occupied {
+        total_entities += entities.len();
         if entities.len() <= 1 {
+            last_seen_uncrashed_position = Some(pos);
+            last_seen_uncrashed_cart = match entities.get(0) {
+                Some(e) => Some(*e),
+                None => last_seen_uncrashed_cart,
+            };
             continue;
         }
         println!("{:?} carts crashed at {:?}", entities.len(), pos);
         for entity in entities {
+            crashed_entities += 1;
             if let Ok((_, mut cart)) = carts.get_mut(entity) {
                 cart.crashed = true;
                 cart.speed = 0.0;
             }
+        }
+    }
+    if total_entities - crashed_entities == 1 {
+        match last_seen_uncrashed_cart {
+            Some(c) => {
+                if let Ok((_, mut cart)) = carts.get_mut(c) {
+                    println!("Last cart is located at {:?}", last_seen_uncrashed_position);
+                    cart.speed = 0.0;
+                }
+            }
+            None => {}
         }
     }
 }
