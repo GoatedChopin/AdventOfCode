@@ -67,7 +67,7 @@ fn part_two(lines: Vec<String>) -> usize {
 }
 
 fn main() {
-    let lines = read_inputs("inputs.txt");
+    let lines = read_inputs("input.txt");
     println!("Part one: {}", part_one(lines.clone()));
     println!("Part two: {}", part_two(lines));
 }
