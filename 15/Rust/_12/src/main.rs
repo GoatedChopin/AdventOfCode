@@ -105,14 +105,14 @@ impl TryFrom<String> for Dict {
         for (i, &c) in chars.iter().enumerate() {
             let bracket = Bracket::try_from(c);
             match bracket {
-                Ok(Bracket::Curly(BracketMode::Open) | Bracket::Square(BracketMode::Open)) => {
+                Ok(Bracket::Curly(BracketMode::Open)) => {
                     if depth == 1 {
                         open_region = Some(i);
                     }
                     depth += 1;
                     max_depth = max_depth.max(depth);
                 }
-                Ok(Bracket::Curly(BracketMode::Close) | Bracket::Square(BracketMode::Close)) => {
+                Ok(Bracket::Curly(BracketMode::Close)) => {
                     depth -= 1;
                     if depth == 1 {
                         let open = open_quote.expect("No top level key close");
@@ -128,6 +128,45 @@ impl TryFrom<String> for Dict {
                         top_level_keys.insert(key.replace('"', ""), value);
                         open_quote = None;
                         close_quote = None;
+                    }
+                }
+                Ok(Bracket::Square(BracketMode::Open)) => {
+                    if depth == 1 {
+                        open_region = Some(i + 1);
+                    }
+                    depth += 1;
+                }
+                Ok(Bracket::Square(BracketMode::Close)) => {
+                    depth -= 1;
+                    if depth == 1 {
+                        let is_value = open_quote.is_some() && close_quote.is_some();
+                        let substring: String = chars[open_region.expect("No region open")..i]
+                            .iter()
+                            .collect();
+                        if substring.contains("[") {
+                            let res = Dict::try_from(substring);
+                            return match res {
+                                Ok(d) => Ok(Dict::Vec(Vec::from([d]))),
+                                Err(e) => Err(e),
+                            };
+                        }
+                        let items: Vec<Dict> = substring
+                            .split(",")
+                            .into_iter()
+                            .filter_map(|item| {
+                                let Ok(d) = Dict::try_from(item) else {
+                                    return None;
+                                };
+                                Some(d)
+                            })
+                            .collect();
+                        if !is_value {
+                            return Ok(Dict::Vec(items));
+                        }
+                        let open = open_quote.expect("No top level key close");
+                        let close = close_quote.expect("No top level key close");
+                        let key: String = chars[open..=close].into_iter().collect();
+                        top_level_keys.insert(key, Dict::Vec(items));
                     }
                 }
                 _ => {}
@@ -184,10 +223,10 @@ impl TryFrom<String> for Dict {
                             let Some((left, right)) = item.split_once(":") else {
                                 return None;
                             };
-                            let Ok(right_d) = Dict::try_from(item.trim()) else {
+                            let Ok(right_d) = Dict::try_from(right.trim()) else {
                                 return None;
                             };
-                            Some((left.to_string(), right_d))
+                            Some((left.replace('"', "").to_string(), right_d))
                         })
                         .collect();
                     return Ok(Dict::HashMap(pairs));
@@ -196,23 +235,7 @@ impl TryFrom<String> for Dict {
             }
         }
 
-        let mut i = 0;
-        while i < brackets.len() - 1 {
-            let j = i + 1;
-            let (left_index, left_bracket) = brackets[i];
-            let (right_index, right_bracket) = brackets[j];
-            if !left_bracket.matches(&right_bracket) {
-                continue;
-            }
-            i += 1;
-        }
         Ok(dict)
-
-        /*
-         * 1. Find all open and close brackets so we can recursively parse
-         * 2. Make a parsing function for each member of Dict
-         * 3. Write test cases
-         */
     }
 }
 
@@ -221,8 +244,13 @@ fn read_input(path: &str) -> Result<Dict, &str> {
     Dict::try_from(string.trim())
 }
 
+fn part_one(dict: &Dict) -> usize {
+    0
+}
+
 fn main() {
-    let dict = read_input("input.txt");
+    let dict = read_input("input.txt").expect("Bad input");
+    println!("Part one: {}", part_one(&dict));
 }
 
 #[cfg(test)]
@@ -250,6 +278,14 @@ mod test {
                 ("a".to_string(), Dict::Int(2 as isize)),
                 ("b".to_string(), Dict::Int(4 as isize)),
             ]))
+        );
+        s = "[[[3]]]";
+        d = Dict::try_from(s).expect("Bad parse!");
+        assert_eq!(
+            d,
+            Dict::Vec(Vec::from([Dict::Vec(Vec::from([Dict::Vec(Vec::from([
+                Dict::Int(3)
+            ]))]))]))
         );
     }
 }
