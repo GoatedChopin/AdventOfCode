@@ -1,52 +1,23 @@
 use std::collections::HashSet;
 use std::fs;
 
-use regex::{Regex, regex};
-
-use crate::RuleVariant::CannotContain;
-
 enum RuleVariant {
     CannotContain(char),
-    Pattern(String),
 }
 
 struct Rule {
     variant: RuleVariant,
-    count: usize,
 }
 
 impl Rule {
-    fn new(variant: RuleVariant, count: usize) -> Self {
-        Self { variant, count }
+    fn new(variant: RuleVariant) -> Self {
+        Self { variant }
     }
 
     fn passes(&self, s: &String) -> bool {
         use RuleVariant::*;
         match &self.variant {
             CannotContain(p) => !s.contains(*p),
-            Pattern(p) => {
-                let Ok(re) = Regex::new(p) else {
-                    return false;
-                };
-                let Some(captures) = re.captures(&s) else {
-                    return false;
-                };
-                let mut valid_captures = Vec::new();
-                for capture_option in captures.iter() {
-                    let Some(capture) = capture_option else {
-                        continue;
-                    };
-                    if valid_captures.is_empty() {
-                        valid_captures.push(capture);
-                        continue;
-                    }
-                    if valid_captures[valid_captures.len() - 1].end() < capture.start() {
-                        valid_captures.push(capture);
-                        continue;
-                    }
-                }
-                return valid_captures.len() >= self.count;
-            }
         }
     }
 }
@@ -63,7 +34,6 @@ impl Password {
             .iter()
             .filter_map(|r| match &r.variant {
                 RuleVariant::CannotContain(c) => Some(*c as i32 - 'a' as i32),
-                RuleVariant::Pattern(_) => None,
             })
             .collect();
         let new_chars: Vec<char> = self.inner.clone().chars().collect();
@@ -132,7 +102,6 @@ impl Password {
             .iter()
             .filter_map(|r| match &r.variant {
                 RuleVariant::CannotContain(c) => Some(*c as i32 - 'a' as i32),
-                RuleVariant::Pattern(_) => None,
             })
             .collect();
         let new_chars: Vec<char> = self.inner.clone().chars().collect();
@@ -181,17 +150,11 @@ impl Password {
         self.inner = new_string;
     }
 
-    fn is_valid(&self) -> bool {
-        self.rules.iter().all(|r| r.passes(&self.inner))
-    }
-
     fn set_default_rules(&mut self) {
         self.rules = Vec::from([
-            Rule::new(RuleVariant::CannotContain('i'), 0),
-            Rule::new(RuleVariant::CannotContain('o'), 0),
-            Rule::new(RuleVariant::CannotContain('l'), 0),
-            Rule::new(RuleVariant::Pattern("([a-z])\\1".to_string()), 2),
-            Rule::new(RuleVariant::Pattern("(?:(?:a(?=b)|b(?=c)|c(?=d)|d(?=e)|e(?=f)|f(?=g)|g(?=h)|h(?=i)|i(?=j)|j(?=k)|k(?=l)|l(?=m)|m(?=n)|n(?=o)|o(?=p)|p(?=q)|q(?=r)|r(?=s)|s(?=t)|t(?=u)|u(?=v)|v(?=w)|w(?=x)|x(?=y)|y(?=z)){2,}[a-z])".to_string()), 1),
+            Rule::new(RuleVariant::CannotContain('i')),
+            Rule::new(RuleVariant::CannotContain('o')),
+            Rule::new(RuleVariant::CannotContain('l')),
         ]);
     }
 }
@@ -246,17 +209,5 @@ mod test {
         password.inner = "aazzzz".to_string();
         password.increment();
         assert_eq!(password.inner, "abaaaa".to_string());
-    }
-
-    #[test]
-    fn test_part_one() {
-        let mut password: Password = "abcdefgh".to_string().into();
-        password.set_default_rules();
-        password.find_next_valid();
-        assert_eq!(password.inner, "abcdffaa".to_string());
-        password = "ghijklmn".to_string().into();
-        password.set_default_rules();
-        password.find_next_valid();
-        assert_eq!(password.inner, "ghjaabcc".to_string());
     }
 }
