@@ -13,13 +13,6 @@ impl Rule {
     fn new(variant: RuleVariant) -> Self {
         Self { variant }
     }
-
-    fn passes(&self, s: &String) -> bool {
-        use RuleVariant::*;
-        match &self.variant {
-            CannotContain(p) => !s.contains(*p),
-        }
-    }
 }
 
 struct Password {
