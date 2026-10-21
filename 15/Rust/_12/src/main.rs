@@ -8,12 +8,58 @@ enum Dict {
     Int(isize),
 }
 
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+enum BracketMode {
+    Open,
+    Close,
+}
+
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+enum Bracket {
+    Curly(BracketMode),
+    Square(BracketMode),
+}
+
+impl Bracket {
+    fn matches(&self, right: &Bracket) -> bool {
+        use Bracket::*;
+        use BracketMode::*;
+        match self {
+            Curly(Open) => *right == Curly(Close),
+            Square(Open) => *right == Square(Close),
+            _ => false, // we only count a match if it's left open, right closed
+        }
+    }
+    fn matches_char(&self, c: char) -> bool {
+        match self {
+            Bracket::Curly(BracketMode::Open) => c == '}',
+            Bracket::Square(BracketMode::Open) => c == ']',
+            Bracket::Curly(BracketMode::Close) => c == '{',
+            Bracket::Square(BracketMode::Close) => c == '[',
+        }
+    }
+}
+
+impl TryFrom<char> for Bracket {
+    type Error = &'static str;
+    fn try_from(c: char) -> Result<Bracket, Self::Error> {
+        match c {
+            '{' => Ok(Bracket::Curly(BracketMode::Open)),
+            '[' => Ok(Bracket::Square(BracketMode::Open)),
+            '}' => Ok(Bracket::Curly(BracketMode::Close)),
+            ']' => Ok(Bracket::Square(BracketMode::Close)),
+            _ => Err("Bad input char"),
+        }
+    }
+}
+
 impl From<&str> for Dict {
     fn from(s: &str) -> Self {
         if s.len() == 0 {
             return Dict::HashMap(HashMap::new());
         }
-        let mut dict = match s[0] {
+        let chars: Vec<char> = s.chars().collect();
+        let mut dict = match chars[0] {
             '{' => Dict::HashMap(HashMap::new()),
             '[' => Dict::Vec(Vec::new()),
             '"' => Dict::String(String::new()),
@@ -29,6 +75,36 @@ impl From<&str> for Dict {
             '9' => Dict::Int(0),
             _ => Dict::String(String::new()),
         };
+        let brackets: Vec<(usize, Bracket)> = chars
+            .iter()
+            .enumerate()
+            .filter_map(|(i, &c)| {
+                let Ok(bracket_result) = Bracket::try_from(c) else {
+                    return None;
+                };
+                Some((i, bracket_result))
+            })
+            .collect();
+        println!("{:?}", brackets);
+
+        if brackets.len() == 0 {
+            // Immediately parse the whole primitive and return.
+        }
+
+        if brackets.len() == 2 {
+            // Immediately parse the whole data structure
+        }
+
+        let mut i = 0;
+        while i < brackets.len() - 1 {
+            let j = i + 1;
+            let (left_index, left_bracket) = brackets[i];
+            let (right_index, right_bracket) = brackets[j];
+            if !left_bracket.matches(&right_bracket) {
+                continue;
+            }
+            i += 1;
+        }
         dict
 
         /*
@@ -40,12 +116,10 @@ impl From<&str> for Dict {
 }
 
 fn read_input(path: &str) -> Dict {
-    let string = fs::read_to_string(path)
-        .expect("Input file must exist")
-        .trim();
-    Dict::from(string)
+    let string = fs::read_to_string(path).expect("Input file must exist");
+    Dict::from(string.trim())
 }
 
 fn main() {
-    println!("Hello, world!");
+    let dict = read_input("input.txt");
 }
