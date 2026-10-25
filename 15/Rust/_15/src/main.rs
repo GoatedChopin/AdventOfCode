@@ -1,4 +1,4 @@
-use std::{collections::BinaryHeap, fs};
+use std::{cmp::Ordering, collections::BinaryHeap, fs};
 
 #[derive(Clone)]
 struct Ingredient {
@@ -22,6 +22,32 @@ impl Ingredient {
     }
 }
 
+struct Measurements {
+    score: isize,
+    amounts: Vec<isize>,
+}
+
+impl Ord for Measurements {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.score.cmp(&other.score)
+    }
+}
+
+impl PartialOrd for Measurements {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.score.cmp(&other.score))
+    }
+}
+
+impl PartialEq for Measurements {
+    fn eq(&self, other: &Measurements) -> bool {
+        self.score == other.score
+    }
+}
+
+impl Eq for Measurements {}
+
+#[derive(Clone)]
 struct Recipe {
     budget: isize,
     ingredients: Vec<Ingredient>,
@@ -37,7 +63,10 @@ impl Recipe {
                 acc.iter_mut().zip(x).for_each(|(a, i)| *a += i);
                 acc
             });
-        qualities.into_iter().fold(1, |acc, x| acc * x).max(0)
+        qualities
+            .into_iter()
+            .fold(1, |acc, x| acc * x.max(0))
+            .max(0)
     }
 
     fn set_amounts(&mut self, amounts: &Vec<isize>) {
@@ -50,18 +79,34 @@ impl Recipe {
     }
 
     fn optimize(&mut self) -> isize {
-        let mut queue = BinaryHeap::from([(0, Vec::from_iter(self.ingredients.iter().map(|_| 0)))]);
+        let mut queue = BinaryHeap::from([Measurements {
+            score: 0,
+            amounts: Vec::from_iter(self.ingredients.iter().map(|_| 0)),
+        }]);
         let mut best_score = isize::MIN;
         let ingredients = self.ingredients.clone();
+        let mut extra = 1000000;
         while !queue.is_empty() {
-            let Some((current_score, current_amounts)) = queue.pop() else {
+            let Some(measurements) = queue.pop() else {
                 break;
             };
-            if current_amounts.iter().map(|a| *a).fold(0, |acc, a| acc + a) > self.budget {
+
+            let quantity = measurements
+                .amounts
+                .iter()
+                .map(|a| *a)
+                .fold(0, |acc, a| acc + a);
+            if quantity >= self.budget && extra > 0 {
+                best_score = best_score.max(measurements.score);
+                extra -= 1;
+                continue;
+            } else if quantity >= self.budget {
+                best_score = best_score.max(measurements.score);
                 break;
             }
-            for (i, ing) in ingredients.iter().enumerate() {
-                let new_amounts = current_amounts
+            for (i, _) in ingredients.iter().enumerate() {
+                let new_amounts = measurements
+                    .amounts
                     .iter()
                     .enumerate()
                     .map(|(ia, a)| {
@@ -74,10 +119,79 @@ impl Recipe {
                 self.set_amounts(&new_amounts);
                 let new_score = self.score();
                 best_score = best_score.max(new_score);
-                queue.push((new_score, new_amounts));
+                // println!("{:?} -> {}", new_amounts, new_score);
+                queue.push(Measurements {
+                    score: new_score,
+                    amounts: new_amounts,
+                });
             }
         }
         best_score
+    }
+
+    fn optimize_to_calories(&mut self, exact_calories: isize) -> isize {
+        let mut queue = BinaryHeap::from([Measurements {
+            score: 0,
+            amounts: Vec::from_iter(self.ingredients.iter().map(|_| 0)),
+        }]);
+        let mut best_score = isize::MIN;
+        let ingredients = self.ingredients.clone();
+        let mut extra = 1000000;
+        while !queue.is_empty() {
+            let Some(measurements) = queue.pop() else {
+                break;
+            };
+
+            let quantity = measurements
+                .amounts
+                .iter()
+                .map(|a| *a)
+                .fold(0, |acc, a| acc + a);
+            let calories = ingredients
+                .iter()
+                .enumerate()
+                .fold(0, |a, (i, ing)| a + measurements.amounts[i] * ing.calories);
+            if calories > exact_calories {
+                continue;
+            }
+            if quantity >= self.budget && extra > 0 && calories == exact_calories {
+                best_score = best_score.max(measurements.score);
+                extra -= 1;
+                continue;
+            } else if quantity >= self.budget {
+                if calories == exact_calories {
+                    best_score = best_score.max(measurements.score);
+                }
+                continue;
+            }
+            for (i, _) in ingredients.iter().enumerate() {
+                let new_amounts = measurements
+                    .amounts
+                    .iter()
+                    .enumerate()
+                    .map(|(ia, a)| {
+                        if ia == i {
+                            return a + 1;
+                        }
+                        return *a;
+                    })
+                    .collect();
+                self.set_amounts(&new_amounts);
+                let new_score = self.score();
+                // println!("{:?} -> {}", new_amounts, new_score);
+                queue.push(Measurements {
+                    score: new_score,
+                    amounts: new_amounts,
+                });
+            }
+        }
+        best_score
+    }
+
+    fn display(&self) {
+        for ingredient in self.ingredients.iter() {
+            println!("{}: {} tsp", ingredient.name, ingredient.amount);
+        }
     }
 }
 
@@ -110,12 +224,22 @@ fn load_input(path: &str) -> Vec<Ingredient> {
 
 fn part_one(recipe: Recipe) -> isize {
     let mut recipe = recipe;
-    recipe.optimize();
-    recipe.score()
+    recipe.optimize()
+}
+
+fn part_two(recipe: Recipe) -> isize {
+    let mut recipe = recipe;
+    recipe.optimize_to_calories(500)
 }
 
 fn main() {
-    println!("Hello, world!");
+    let mut ingredients = load_input("input.txt");
+    let recipe = Recipe {
+        ingredients,
+        budget: 100,
+    };
+    println!("Part one: {}", part_one(recipe.clone()));
+    println!("Part two: {}", part_two(recipe));
 }
 
 #[cfg(test)]
@@ -127,11 +251,13 @@ mod test {
         let mut ingredients = load_input("test.txt");
         ingredients[0].amount = 44;
         ingredients[1].amount = 56;
-        let recipe = Recipe {
+        let mut recipe = Recipe {
             ingredients,
             budget: 100,
         };
         assert_eq!(recipe.score(), 62842880);
+        recipe.set_amounts(&Vec::from([1, 0]));
+        assert_eq!(recipe.score(), 0);
     }
 
     #[test]
@@ -142,5 +268,15 @@ mod test {
             budget: 100,
         };
         assert_eq!(part_one(recipe), 62842880);
+    }
+
+    #[test]
+    fn test_part_two() {
+        let mut ingredients = load_input("test.txt");
+        let recipe = Recipe {
+            ingredients,
+            budget: 100,
+        };
+        assert_eq!(part_two(recipe), 57600000);
     }
 }
