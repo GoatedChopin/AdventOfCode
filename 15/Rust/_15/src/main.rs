@@ -1,4 +1,9 @@
-use std::{cmp::Ordering, collections::BinaryHeap, fs};
+use std::{
+    cmp::Ordering,
+    collections::{BinaryHeap, HashSet},
+    fs,
+    hash::{Hash, Hasher},
+};
 
 #[derive(Clone)]
 struct Ingredient {
@@ -20,11 +25,38 @@ impl Ingredient {
             self.amount * self.texture,
         ])
     }
+
+    fn raw_qualities(&self, amount: isize) -> Vec<isize> {
+        Vec::from([
+            amount * self.capacity,
+            amount * self.durability,
+            amount * self.flavor,
+            amount * self.texture,
+        ])
+    }
 }
 
+#[derive(Clone)]
 struct Measurements {
     score: isize,
     amounts: Vec<isize>,
+}
+
+impl Measurements {
+    fn score(&self, ingredients: &Vec<Ingredient>) -> isize {
+        let qualities = ingredients
+            .iter()
+            .zip(self.amounts.iter())
+            .map(|(ingredient, amount)| ingredient.raw_qualities(*amount))
+            .fold(Vec::from([0, 0, 0, 0]), |mut acc, x| {
+                acc.iter_mut().zip(x).for_each(|(a, i)| *a += i);
+                acc
+            });
+        qualities
+            .into_iter()
+            .fold(1, |acc, x| acc * x.max(0))
+            .max(0)
+    }
 }
 
 impl Ord for Measurements {
@@ -46,6 +78,13 @@ impl PartialEq for Measurements {
 }
 
 impl Eq for Measurements {}
+
+impl Hash for Measurements {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let s: String = self.amounts.iter().map(|i| i.to_string() + ",").collect();
+        s.hash(state)
+    }
+}
 
 #[derive(Clone)]
 struct Recipe {
@@ -130,59 +169,48 @@ impl Recipe {
     }
 
     fn optimize_to_calories(&mut self, exact_calories: isize) -> isize {
-        let mut queue = BinaryHeap::from([Measurements {
+        let mut best_score = isize::MIN;
+        let mut queue = BinaryHeap::new();
+        queue.push(Measurements {
             score: 0,
             amounts: Vec::from_iter(self.ingredients.iter().map(|_| 0)),
-        }]);
-        let mut best_score = isize::MIN;
-        let ingredients = self.ingredients.clone();
-        let mut extra = 1000000;
+        });
+        let mut visited = HashSet::new();
         while !queue.is_empty() {
             let Some(measurements) = queue.pop() else {
-                break;
+                continue;
             };
-
-            let quantity = measurements
+            let calories = measurements
                 .amounts
                 .iter()
-                .map(|a| *a)
-                .fold(0, |acc, a| acc + a);
-            let calories = ingredients
-                .iter()
-                .enumerate()
-                .fold(0, |a, (i, ing)| a + measurements.amounts[i] * ing.calories);
-            if calories > exact_calories {
-                continue;
-            }
-            if quantity >= self.budget && extra > 0 && calories == exact_calories {
-                best_score = best_score.max(measurements.score);
-                extra -= 1;
-                continue;
-            } else if quantity >= self.budget {
-                if calories == exact_calories {
-                    best_score = best_score.max(measurements.score);
-                }
-                continue;
-            }
-            for (i, _) in ingredients.iter().enumerate() {
-                let new_amounts = measurements
-                    .amounts
-                    .iter()
-                    .enumerate()
-                    .map(|(ia, a)| {
-                        if ia == i {
-                            return a + 1;
-                        }
-                        return *a;
-                    })
-                    .collect();
-                self.set_amounts(&new_amounts);
-                let new_score = self.score();
-                // println!("{:?} -> {}", new_amounts, new_score);
-                queue.push(Measurements {
-                    score: new_score,
-                    amounts: new_amounts,
+                .zip(self.ingredients.iter())
+                .fold(0, |a, (amount, ingredient)| {
+                    a + (amount * ingredient.calories)
                 });
+            let total_amount: isize = measurements.amounts.iter().sum();
+            // println!(
+            //     "{:?} -> {} tsp {} cals -> {}",
+            //     measurements.amounts, total_amount, calories, measurements.score
+            // );
+            if total_amount > self.budget || calories > exact_calories {
+                continue;
+            } else if total_amount == self.budget && calories == exact_calories {
+                best_score = best_score.max(measurements.score(&self.ingredients));
+                continue;
+            }
+            for i in 0..self.ingredients.len() {
+                let mut new_amounts = measurements.amounts.clone();
+                new_amounts[i] += 1;
+                let mut new_measurements = Measurements {
+                    score: 0,
+                    amounts: new_amounts,
+                };
+                if visited.contains(&new_measurements) {
+                    continue;
+                }
+                visited.insert(new_measurements.clone());
+                new_measurements.score = new_measurements.score(&self.ingredients);
+                queue.push(new_measurements);
             }
         }
         best_score
@@ -233,7 +261,7 @@ fn part_two(recipe: Recipe) -> isize {
 }
 
 fn main() {
-    let mut ingredients = load_input("input.txt");
+    let ingredients = load_input("input.txt");
     let recipe = Recipe {
         ingredients,
         budget: 100,
@@ -252,10 +280,15 @@ mod test {
         ingredients[0].amount = 44;
         ingredients[1].amount = 56;
         let mut recipe = Recipe {
-            ingredients,
+            ingredients: ingredients.clone(),
             budget: 100,
         };
         assert_eq!(recipe.score(), 62842880);
+        let measurements = Measurements {
+            score: 0,
+            amounts: ingredients.iter().map(|ing| ing.amount).collect(),
+        };
+        assert_eq!(measurements.score(&recipe.ingredients), 62842880);
         recipe.set_amounts(&Vec::from([1, 0]));
         assert_eq!(recipe.score(), 0);
     }
