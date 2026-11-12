@@ -117,6 +117,14 @@ impl Attempt {
         return None;
     }
 
+    fn bleed(&mut self) -> Option<TurnState> {
+        self.me.health -= 1;
+        if self.me.health <= 0 {
+            return Some(TurnState::PlayerDeath);
+        }
+        return None;
+    }
+
     fn tick(&mut self) -> Option<TurnState> {
         self.turns += 1;
         self.effects = self
@@ -167,8 +175,10 @@ impl Attempt {
                 if spell.cost > self.me.mana {
                     return false;
                 }
-                if self.effects.contains_key(&spell.effect) {
-                    return false;
+                if let Some(duration) = self.effects.get(&spell.effect) {
+                    if *duration > 1 {
+                        return false;
+                    }
                 }
                 return true;
             })
@@ -179,7 +189,7 @@ impl Attempt {
 
 impl PartialEq for Attempt {
     fn eq(&self, other: &Attempt) -> bool {
-        self.total_mana > other.total_mana
+        self.total_mana == other.total_mana
     }
 }
 
@@ -187,13 +197,13 @@ impl Eq for Attempt {}
 
 impl PartialOrd for Attempt {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.total_mana.cmp(&other.total_mana))
+        Some(other.total_mana.cmp(&self.total_mana))
     }
 }
 
 impl Ord for Attempt {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.total_mana.cmp(&other.total_mana)
+        other.total_mana.cmp(&self.total_mana)
     }
 }
 
@@ -210,7 +220,6 @@ fn part_one(me: Guy, other: Guy) -> isize {
         let Some(mut current_attempt) = queue.pop() else {
             continue;
         };
-        println!("{:?}", current_attempt);
         if current_attempt.total_mana > min_mana {
             continue;
         }
@@ -239,7 +248,7 @@ fn part_one(me: Guy, other: Guy) -> isize {
             let mut new_attempt = current_attempt.clone();
             match new_attempt.cast(s) {
                 Some(TurnState::BossDeath) => {
-                    min_mana = min_mana.min(current_attempt.total_mana);
+                    min_mana = min_mana.min(new_attempt.total_mana);
                     continue;
                 }
                 Some(TurnState::PlayerDeath) => {
@@ -249,7 +258,7 @@ fn part_one(me: Guy, other: Guy) -> isize {
             }
             match new_attempt.tick() {
                 Some(TurnState::BossDeath) => {
-                    min_mana = min_mana.min(current_attempt.total_mana);
+                    min_mana = min_mana.min(new_attempt.total_mana);
                     continue;
                 }
                 Some(TurnState::PlayerDeath) => {
@@ -259,7 +268,89 @@ fn part_one(me: Guy, other: Guy) -> isize {
             }
             match new_attempt.boss_turn() {
                 Some(TurnState::BossDeath) => {
-                    min_mana = min_mana.min(current_attempt.total_mana);
+                    min_mana = min_mana.min(new_attempt.total_mana);
+                    continue;
+                }
+                Some(TurnState::PlayerDeath) => {
+                    continue;
+                }
+                None => {}
+            }
+            queue.push(new_attempt)
+        }
+    }
+
+    min_mana
+}
+
+fn part_two(me: Guy, other: Guy) -> isize {
+    let mut min_mana = isize::MAX;
+    let mut queue = BinaryHeap::from([Attempt {
+        total_mana: 0,
+        turns: 0,
+        me,
+        other,
+        effects: HashMap::new(),
+    }]);
+    while !queue.is_empty() {
+        let Some(mut current_attempt) = queue.pop() else {
+            continue;
+        };
+        if current_attempt.total_mana > min_mana {
+            continue;
+        }
+        if current_attempt.me.health <= 0 {
+            continue;
+        }
+        if current_attempt.other.health <= 0 {
+            min_mana = min_mana.min(current_attempt.total_mana);
+            continue;
+        }
+        match current_attempt.bleed() {
+            Some(TurnState::PlayerDeath) => {
+                continue;
+            }
+            _ => {}
+        }
+        match current_attempt.tick() {
+            Some(TurnState::BossDeath) => {
+                min_mana = min_mana.min(current_attempt.total_mana);
+                continue;
+            }
+            Some(TurnState::PlayerDeath) => {
+                continue;
+            }
+            None => {}
+        }
+        let spells = current_attempt.allowed_spells();
+        if spells.len() == 0 {
+            continue;
+        }
+        for s in spells {
+            let mut new_attempt = current_attempt.clone();
+            match new_attempt.cast(s) {
+                Some(TurnState::BossDeath) => {
+                    min_mana = min_mana.min(new_attempt.total_mana);
+                    continue;
+                }
+                Some(TurnState::PlayerDeath) => {
+                    continue;
+                }
+                None => {}
+            }
+            match new_attempt.tick() {
+                Some(TurnState::BossDeath) => {
+                    min_mana = min_mana.min(new_attempt.total_mana);
+                    continue;
+                }
+                Some(TurnState::PlayerDeath) => {
+                    continue;
+                }
+                None => {}
+            }
+            match new_attempt.boss_turn() {
+                Some(TurnState::BossDeath) => {
+                    min_mana = min_mana.min(new_attempt.total_mana);
                     continue;
                 }
                 Some(TurnState::PlayerDeath) => {
@@ -282,6 +373,7 @@ fn main() {
     };
     let boss = read_input("input.txt");
     println!("Part one: {}", part_one(me, boss));
+    println!("Part two: {}", part_two(me, boss));
 }
 
 #[cfg(test)]
@@ -308,7 +400,7 @@ mod test {
             damage: 8,
         };
         let p1 = part_one(me, other);
-        assert_eq!(p1, POISON.cost + MISSILE.cost)
+        assert_eq!(p1, 641);
     }
 
     #[test]
