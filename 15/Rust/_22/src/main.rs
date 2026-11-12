@@ -1,4 +1,4 @@
-use std::cmp::{Ord, Reverse};
+use std::cmp::Ord;
 use std::collections::{BinaryHeap, HashMap};
 use std::fs;
 
@@ -30,14 +30,14 @@ const SPELLS: [Spell; 5] = [
     },
 ];
 
-#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
 struct Guy {
     health: isize,
     mana: isize,
     damage: isize,
 }
 
-#[derive(Copy, Clone, Hash, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
 enum SpellEffect {
     Damage(isize),
     Drain(isize),
@@ -68,7 +68,7 @@ fn read_input(path: &str) -> Guy {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Attempt {
     total_mana: isize,
     turns: usize,
@@ -78,7 +78,10 @@ struct Attempt {
 }
 
 impl Attempt {
-    fn cast(&mut self, spell: Spell) {
+    fn cast(&mut self, spell: Spell) -> bool {
+        if self.other.health <= 0 {
+            return true;
+        }
         self.me.mana -= spell.cost;
         match spell.effect {
             SpellEffect::Damage(damage) => self.other.health -= damage,
@@ -95,30 +98,43 @@ impl Attempt {
         if spell.duration > 1 {
             self.effects.insert(spell.effect, spell.duration);
         }
+        return self.other.health <= 0;
     }
 
-    fn tick(&mut self) {
+    fn tick(&mut self) -> bool {
         self.turns += 1;
         self.effects = self
             .effects
             .iter()
             .filter_map(|(effect, duration)| {
-                if *duration == 1 {
+                if *duration <= 0 {
                     return None;
                 }
                 Some((*effect, duration - 1))
             })
             .collect();
-        let mut damage = self.other.damage;
         self.effects.iter().for_each(|(effect, _)| {
             match effect {
                 SpellEffect::Damage(damage) => self.other.health -= damage,
                 SpellEffect::Recharge(mana) => self.me.mana += mana,
+                _ => {}
+            };
+        });
+        return self.other.health <= 0;
+    }
+
+    fn boss_turn(&mut self) -> bool {
+        let mut damage = self.other.damage;
+        self.effects.iter().for_each(|(effect, _)| {
+            match effect {
                 SpellEffect::Shield(armor) => damage = (damage - armor).max(1),
                 _ => {}
             };
         });
-        self.me.health -= damage;
+        if self.other.health > 0 {
+            self.me.health -= damage;
+        }
+        return self.other.health <= 0;
     }
 
     fn allowed_spells(&self) -> Vec<Spell> {
@@ -171,6 +187,7 @@ fn part_one(me: Guy, other: Guy) -> isize {
         let Some(current_attempt) = queue.pop() else {
             continue;
         };
+        println!("{:?}", current_attempt);
         if current_attempt.total_mana > min_mana {
             continue;
         }
@@ -182,10 +199,27 @@ fn part_one(me: Guy, other: Guy) -> isize {
             continue;
         }
         let spells = current_attempt.allowed_spells();
+        if spells.len() == 0 {
+            continue;
+        }
         for s in spells {
             let mut new_attempt = current_attempt.clone();
-            new_attempt.cast(s);
-            new_attempt.tick();
+            if new_attempt.tick() {
+                min_mana = min_mana.min(new_attempt.total_mana);
+                break;
+            }
+            if new_attempt.cast(s) {
+                min_mana = min_mana.min(new_attempt.total_mana);
+                break;
+            }
+            if new_attempt.tick() {
+                min_mana = min_mana.min(new_attempt.total_mana);
+                break;
+            }
+            if new_attempt.boss_turn() {
+                min_mana = min_mana.min(new_attempt.total_mana);
+                break;
+            }
             queue.push(new_attempt)
         }
     }
@@ -201,4 +235,33 @@ fn main() {
     };
     let boss = read_input("input.txt");
     println!("Part one: {}", part_one(me, boss));
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_part_one() {
+        let me = Guy {
+            health: 10,
+            mana: 250,
+            damage: 0,
+        };
+        let other = Guy {
+            health: 13,
+            mana: 0,
+            damage: 8,
+        };
+        let p1 = part_one(me, other);
+        assert_eq!(p1, 173 + 53);
+        let other = Guy {
+            health: 14,
+            mana: 0,
+            damage: 8,
+        };
+        let p1 = part_one(me, other);
+        println!("Harder");
+        assert_eq!(p1, 229 + 113 + 73 + 173 + 53)
+    }
 }
