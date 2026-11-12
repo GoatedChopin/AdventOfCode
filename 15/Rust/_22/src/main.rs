@@ -1,7 +1,6 @@
 use std::cmp::Ord;
 use std::collections::{BinaryHeap, HashMap};
 use std::fs;
-use std::thread::current;
 
 const SPELLS: [Spell; 5] = [
     Spell {
@@ -30,6 +29,12 @@ const SPELLS: [Spell; 5] = [
         duration: 5,
     },
 ];
+
+const MISSILE: Spell = SPELLS[0];
+const DRAIN: Spell = SPELLS[1];
+const SHIELD: Spell = SPELLS[2];
+const POISON: Spell = SPELLS[3];
+const RECHARGE: Spell = SPELLS[4];
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
 struct Guy {
@@ -69,6 +74,7 @@ fn read_input(path: &str) -> Guy {
     }
 }
 
+#[derive(Debug, Eq, PartialEq)]
 enum TurnState {
     PlayerDeath,
     BossDeath,
@@ -90,13 +96,14 @@ impl Attempt {
         }
         self.me.mana -= spell.cost;
         match spell.effect {
-            SpellEffect::Damage(damage) => self.other.health -= damage,
+            SpellEffect::Damage(damage) => {
+                if spell.duration == 1 {
+                    self.other.health -= damage;
+                }
+            }
             SpellEffect::Drain(damage) => {
                 self.other.health -= damage;
                 self.me.health += damage;
-            }
-            SpellEffect::Recharge(mana) => {
-                self.me.mana += mana;
             }
             _ => {}
         }
@@ -301,6 +308,111 @@ mod test {
             damage: 8,
         };
         let p1 = part_one(me, other);
-        assert_eq!(p1, 229 + 113 + 73 + 173 + 53)
+        assert_eq!(p1, POISON.cost + MISSILE.cost)
+    }
+
+    #[test]
+    fn test_poison() {
+        let me = Guy {
+            health: 10,
+            mana: 250,
+            damage: 0,
+        };
+        let other = Guy {
+            health: 19,
+            mana: 0,
+            damage: 8,
+        };
+        let mut attempt = Attempt {
+            me,
+            other,
+            total_mana: 0,
+            turns: 0,
+            effects: HashMap::new(),
+        };
+        attempt.cast(SPELLS[3]);
+        for _ in 0..1000 {
+            attempt.tick();
+        }
+        assert_eq!(attempt.other.health, 1);
+    }
+
+    #[test]
+    fn test_scenario() {
+        let me = Guy {
+            health: 10,
+            mana: 250,
+            damage: 0,
+        };
+        let other = Guy {
+            health: 14,
+            mana: 0,
+            damage: 8,
+        };
+        let mut attempt = Attempt {
+            me,
+            other,
+            total_mana: 0,
+            turns: 0,
+            effects: HashMap::new(),
+        };
+
+        attempt.tick();
+        attempt.cast(RECHARGE);
+
+        assert_eq!(attempt.me.mana, 21);
+        attempt.tick();
+        attempt.boss_turn();
+
+        assert_eq!(attempt.me.health, 2);
+        assert_eq!(attempt.me.mana, 122);
+
+        attempt.tick();
+        attempt.cast(SHIELD);
+
+        assert_eq!(attempt.me.health, 2);
+        assert_eq!(attempt.me.mana, 110);
+
+        attempt.tick();
+        attempt.boss_turn();
+
+        assert_eq!(attempt.me.health, 1);
+        assert_eq!(attempt.me.mana, 211);
+
+        attempt.tick();
+        attempt.cast(DRAIN);
+
+        assert_eq!(attempt.me.health, 3);
+        assert_eq!(attempt.me.mana, 239);
+
+        attempt.tick();
+        attempt.boss_turn();
+
+        assert_eq!(attempt.me.health, 2);
+        assert_eq!(attempt.me.mana, 340);
+
+        attempt.tick();
+        attempt.cast(POISON);
+
+        assert_eq!(attempt.other.health, 12);
+        assert_eq!(attempt.me.health, 2);
+        assert_eq!(attempt.me.mana, 167);
+
+        attempt.tick();
+        attempt.boss_turn();
+
+        assert_eq!(attempt.other.health, 9);
+        assert_eq!(attempt.me.health, 1);
+        assert_eq!(attempt.me.mana, 167);
+
+        attempt.tick();
+        attempt.cast(MISSILE);
+
+        assert_eq!(attempt.other.health, 2);
+        assert_eq!(attempt.me.health, 1);
+        assert_eq!(attempt.me.mana, 114);
+
+        attempt.tick();
+        assert_eq!(attempt.boss_turn(), Some(TurnState::BossDeath));
     }
 }
