@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use std::{cmp::Ordering, fs};
 
 fn distribution(packages: Vec<usize>, groups: Vec<usize>) -> Vec<usize> {
@@ -33,6 +34,10 @@ fn create_balanced_group(packages: Vec<usize>) -> Vec<usize> {
     let target: usize = packages.iter().map(|i| *i).sum::<usize>() / 3;
 
     while total != target {
+        println!(
+            "{:?}\n{:?}\n{:?} {} -> {}\n",
+            packages, in_group, untenable, total, target
+        );
         match total.cmp(&target) {
             Ordering::Equal => {
                 continue;
@@ -45,7 +50,7 @@ fn create_balanced_group(packages: Vec<usize>) -> Vec<usize> {
             }
             Ordering::Greater => {
                 // backtrack
-                backtrack_point = pointer;
+                backtrack_point = pointer + 1;
                 while backtrack_point < untenable.len() && untenable[backtrack_point] {
                     backtrack_point += 1;
                 }
@@ -79,15 +84,35 @@ fn read_input(path: &str) -> Vec<usize> {
     out
 }
 
-fn part_one(packages: Vec<usize>) -> usize {
-    let group = create_balanced_group(packages);
-    println!("{:?}", group);
-    group.into_iter().fold(1, |acc, i| acc * i)
+fn balance(packages: Vec<usize>, target: usize) -> usize {
+    let mut lowest_size = packages.len();
+    let mut lowest_entanglement = usize::MAX;
+    for size in 0..packages.len() {
+        if size > lowest_size {
+            continue;
+        }
+        for combo in packages.iter().combinations(size) {
+            let sum = combo.iter().map(|u| *u).sum::<usize>();
+            if sum != target {
+                continue;
+            }
+            let entanglement = combo.into_iter().fold(1, |acc, i| acc * i);
+            if entanglement > lowest_entanglement {
+                continue;
+            }
+            lowest_size = size;
+            lowest_entanglement = entanglement;
+        }
+    }
+    lowest_entanglement
 }
 
 fn main() {
     let packages = read_input("input.txt");
-    println!("Part one: {}", part_one(packages));
+    let third = packages.iter().sum::<usize>() / 3;
+    let fourth = packages.iter().sum::<usize>() / 4;
+    println!("Part one: {}", balance(packages.clone(), third));
+    println!("Part two: {}", balance(packages, fourth));
 }
 
 #[cfg(test)]
