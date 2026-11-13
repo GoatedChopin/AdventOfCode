@@ -11,32 +11,21 @@ fn next_number(n: usize) -> usize {
     n * 252533 % 33554393
 }
 
-fn coordinate(i: usize, cache: &mut Cache) -> (usize, usize) {
-    if let Some(c) = cache.inner.get(&i) {
-        return *c;
+fn coordinate(i: usize) -> (usize, usize) {
+    let mut d = 0;
+
+    while (d + 1) * (d + 2) / 2 <= i {
+        d += 1;
     }
-    let (mut row, mut col) = match cache.inner.get(&cache.max_i) {
-        Some(&(row, col)) => (row, col),
-        None => (0, 0),
-    };
-    for _ in cache.max_i..i {
-        if row == 0 {
-            col = 0;
-            row = cache.max_row + 1;
-            cache.max_row += 1;
-        } else {
-            row -= 1;
-            col += 1;
-        }
-    }
-    cache.inner.insert(i, (row, col));
-    cache.max_i = cache.max_i.max(i);
-    (row, col)
+
+    let offset = i - d * (d + 1) / 2;
+
+    (d - offset, offset)
 }
 
 fn part_one(c: (usize, usize), cache: &mut Cache) -> usize {
     let mut i = 0;
-    while coordinate(i, cache) != c {
+    while coordinate(i) != c {
         i += 1;
     }
     let mut current = 20151125;
@@ -69,7 +58,7 @@ mod test {
             max_row: 0,
             max_col: 0,
         };
-        assert_eq!(coordinate(5, &mut cache), (1, 1));
-        assert_eq!(coordinate(21, &mut cache), (0, 5));
+        assert_eq!(coordinate(5), (1, 1));
+        assert_eq!(coordinate(21), (0, 5));
     }
 }
