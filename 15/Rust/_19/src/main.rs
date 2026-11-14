@@ -1,34 +1,134 @@
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet};
 use std::fs;
 
 #[derive(Clone, Debug)]
-struct Replacement {
-    input: String,
-    out: String,
-}
-
-impl Replacement {
-    fn inverse(&self) -> Self {
-        Self {
-            input: self.out.clone(),
-            out: self.input.clone(),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
 struct Molecule {
-    rules: Vec<Replacement>,
-    input: String,
+    rules: HashMap<String, String>,
+    inner: String,
+    target: String,
 }
 
 impl Molecule {
-    fn inverse(&self) -> Self {
-        Self {
-            input: self.input.clone(),
-            rules: self.rules.iter().map(|r| r.inverse()).collect(),
+    fn replacements(&self) -> Vec<(usize, String, String)> {
+        let mut r = Vec::new();
+        for (before, after) in self.rules.iter() {
+            let m = matches(&self.inner, before);
+            r.extend(m.into_iter().map(|i| (i, before.clone(), after.clone())));
+        }
+        r
+    }
+
+    fn search(&mut self, steps: usize) -> Option<usize> {
+        if self.inner == self.target {
+            return Some(steps);
+        }
+        let replacements = self.replacements();
+        for (i, before, after) in replacements.into_iter() {
+            replace(&mut self.inner, i, &before, &after);
+            println!("({})\t{}", steps, self.inner);
+            if let Some(new_steps) = self.search(steps + 1) {
+                return Some(new_steps);
+            }
+            replace(&mut self.inner, i, &after, &before);
+        }
+        None
+    }
+}
+
+fn matches(haystack: &str, needle: &str) -> Vec<usize> {
+    haystack
+        .as_bytes()
+        .windows(needle.len())
+        .enumerate()
+        .filter(|(_, w)| *w == needle.as_bytes())
+        .map(|(i, _)| i)
+        .collect()
+}
+
+fn replace(s: &mut String, i: usize, before: &str, after: &str) {
+    let mut new = s[0..i].to_owned();
+    new += after;
+    new += &s[i + before.len()..s.len()];
+    *s = new;
+}
+
+fn chars_reachable(start: &String, h: &HashMap<String, String>) -> HashSet<char> {
+    print!("{} -> ", start);
+
+    /*
+     * 1. Start with e, branch out to as many chars as you can
+     * 2. Start with *target*, branch out to as many chars as you can
+     * 2. Take the intersection of #1 and #2
+     * 3. Prune all kv pairs that contain a letter in the intersection
+     *
+     * abc -> d
+     * dd -> e
+     *
+     * input: abzabz
+     * abz -> f
+     * z -> g
+     * ff -> e
+     *
+     * e -> ff
+     * f -> abz
+     * {efabz}
+     * for k, v in h {
+     *  if !v.chars().all(* in reachable *) {
+     *      *prune*
+     * }
+     * }
+     *
+     * for all keys, do any contain d. If yes, do
+     */
+    let mut reachable_chars = HashSet::new();
+    reachable_chars.extend(start.chars());
+    let mut new_reach = true;
+    while new_reach {
+        new_reach = false;
+        for (before, after) in h.iter() {
+            if before.chars().all(|c| reachable_chars.contains(&c)) {
+                for c in after.chars() {
+                    if !reachable_chars.contains(&c) {
+                        new_reach = true;
+                        reachable_chars.insert(c);
+                    }
+                }
+            }
         }
     }
+
+    reachable_chars
+}
+
+fn prune_graph(molecule: Molecule) -> HashMap<String, String> {
+    let inner_reachable = chars_reachable(&molecule.inner, &molecule.rules.clone());
+    let target_reachable = chars_reachable(
+        &molecule.target,
+        &molecule
+            .rules
+            .clone()
+            .into_iter()
+            .map(|(k, v)| (v, k))
+            .collect(),
+    );
+
+    let bad_chars: HashSet<char> = inner_reachable
+        .symmetric_difference(&target_reachable)
+        .map(|&c| c)
+        .collect();
+
+    println!(
+        "Inner {:?}\n\nTarget {:?}\n\nBad Chars {:?}",
+        inner_reachable, target_reachable, bad_chars
+    );
+    molecule
+        .rules
+        .into_iter()
+        .filter(|(before, after)| {
+            before.chars().all(|c| !bad_chars.contains(&c))
+                && after.chars().all(|c| !bad_chars.contains(&c))
+        })
+        .collect()
 }
 
 fn read_input(path: &str) -> Molecule {
@@ -38,154 +138,26 @@ fn read_input(path: &str) -> Molecule {
         .lines()
         .map(|line| {
             let (input, out) = line.trim().split_once(" => ").expect("Bad rule input");
-            Replacement {
-                input: input.to_string(),
-                out: out.to_string(),
-            }
+            (out.to_string(), input.to_string())
         })
         .collect();
     Molecule {
         rules,
-        input: input.trim().to_string(),
+        target: "e".to_string(),
+        inner: input.trim().to_string(),
     }
-}
-
-fn distinct_replacements(input: String, rules: &Vec<Replacement>) -> HashSet<String> {
-    let mut distinct = HashSet::new();
-    rules.iter().for_each(|rule| {
-        for l in 0..=input.len() {
-            let Some(slice) = input.get(l..(l + rule.input.len())) else {
-                continue;
-            };
-            if slice == rule.input {
-                let (left, right_raw) = input.split_at(l);
-                let (_old, right) = right_raw.split_at(rule.input.len());
-                let new_string: String = left.to_string() + &rule.out + right;
-                distinct.insert(new_string);
-            }
-        }
-    });
-    distinct
-}
-
-fn apply_mutations(input: String, mutations: Vec<(usize, String, String)>) -> String {
-    let mut new_string = String::new();
-    let mut left = 0;
-    for (i, before, after) in mutations.clone() {
-        if i > left {
-            new_string += &input.get(left..i).unwrap_or(&"".to_string());
-        }
-        left = i + before.len();
-        new_string += &after;
-    }
-    println!("{} -> {:?} -> {}", input, mutations, new_string);
-    new_string
-}
-
-fn generate(
-    pairs: &[(usize, String, String)],
-    index: usize,
-    current: &mut Vec<(usize, String, String)>,
-    results: &mut Vec<Vec<(usize, String, String)>>,
-) {
-    // Base case, nothing to apply
-    if index >= pairs.len() {
-        results.push(current.clone());
-        return;
-    }
-    // Case 1, the current mutation does not overlap
-    if let Some((i, before, after)) = pairs.get(pairs.len() - 1) {
-        match current.get(current.len().saturating_sub(1)) {
-            Some((li, lbefore, lafter)) => {}
-            None => current.push((i.clone(), before.clone(), after.clone())),
-        }
-    }
-}
-
-fn multi_replacements(input: String, rules: &Vec<Replacement>) -> HashSet<(usize, String)> {
-    let mut distinct = HashSet::new();
-    let mut pairs = Vec::new();
-    for l in 0..=input.len() {
-        rules.iter().for_each(|rule| {
-            let Some(slice) = input.get(l..(l + rule.input.len())) else {
-                return;
-            };
-            if slice == rule.input {
-                pairs.push((l, rule.input.clone(), rule.out.clone()));
-            }
-        });
-    }
-    pairs.sort();
-    println!("{:?}", pairs);
-
-    let mut mutations = Vec::from([Vec::new()]);
-
-    for (i, before, after) in pairs.into_iter() {
-        for m in mutations.iter_mut() {
-            let last_index = m.get(m.len().saturating_sub(1));
-            match last_index {
-                Some((li, _lbefore, _lafter)) => {
-                    if li + before.len() <= i {
-                        // The mutations don't overlap
-                        m.push((i, before.clone(), after.clone()));
-                        continue;
-                    }
-                    let mut new_mutations = m.clone();
-                    new_mutations.pop();
-                    new_mutations.push((i, before.clone(), after.clone()));
-                }
-                None => m.push((i, before.clone(), after.clone())),
-            }
-        }
-    }
-
-    mutations.into_iter().for_each(|m| {
-        distinct.insert((m.len(), apply_mutations(input.clone(), m)));
-    });
-
-    // a -> bb
-    // c -> b
-    // bbbb
-    // (0, bb, a) (0, b, c) (1, bb, a) (1, b, c) (2, bb, a) (2, b, c) (3, b, c)
-    //
-    // abb
-    distinct
-}
-
-fn part_one(molecule: Molecule) -> usize {
-    let dr = distinct_replacements(molecule.input, &molecule.rules);
-    println!("{:?}", dr);
-    dr.len()
 }
 
 fn part_two(molecule: Molecule) -> usize {
-    let inverse = molecule.inverse();
-    let mut queue = VecDeque::from([(0, inverse.input)]);
-    let mut visited = HashSet::from(["e".to_string()]);
-    let e = "e".to_string();
-    while !queue.is_empty() {
-        let Some((steps, current_string)) = queue.pop_front() else {
-            break;
-        };
-        if current_string == e {
-            return steps;
-        }
-        let new_strings = multi_replacements(current_string, &inverse.rules);
-        for (new_steps, s) in new_strings.iter() {
-            if visited.contains(s) {
-                continue;
-            }
-            println!("{} -> {}", s, steps + new_steps);
-            queue.push_back((steps + new_steps, s.clone()));
-            visited.insert(s.clone());
-        }
-    }
-    panic!("No solution found")
+    let mut molecule = molecule;
+    println!("Raw: {:?}", molecule.rules);
+    molecule.rules = prune_graph(molecule.clone());
+    println!("Pruned: {:?}", molecule.rules);
+    molecule.search(0).expect("Must be a path")
 }
 
 fn main() {
     let molecule = read_input("input.txt");
-    println!("Part one: {}", part_one(molecule.clone()));
     println!("Part two: {}", part_two(molecule));
 }
 
@@ -194,15 +166,29 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_part_one() {
-        let molecule = read_input("test.txt");
-        assert_eq!(part_one(molecule), 4);
+    fn test_prune() {
+        let mut s = "abcdefg".to_owned();
+        replace(&mut s, 2, "cde", "abc");
+        assert_eq!(s, "ababcfg".to_owned());
+
+        let h = HashMap::from([
+            ("a".to_owned(), "b".to_owned()),
+            ("abc".to_owned(), "b".to_owned()),
+            ("b".to_owned(), "e".to_owned()),
+            ("d".to_owned(), "f".to_owned()),
+        ]);
+        let p = prune_graph(Molecule {
+            rules: h,
+            inner: s,
+            target: "e".to_string(),
+        });
+        assert!(!p.contains_key(&"d".to_owned()));
     }
 
     #[test]
     fn test_part_two() {
         let molecule = read_input("test2.txt");
-        println!("{:?}", molecule.inverse());
+        println!("{:?}", molecule);
         assert_eq!(part_two(molecule), 6);
     }
 }
