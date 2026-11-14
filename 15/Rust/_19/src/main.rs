@@ -1,5 +1,24 @@
-use std::collections::{HashMap, HashSet};
+use std::cmp::{Ordering, Reverse};
+use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::fs;
+
+#[derive(Eq, PartialEq)]
+struct Guess {
+    steps: usize,
+    inner: String,
+}
+
+impl PartialOrd for Guess {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some((self.inner.len() + self.steps).cmp(&(other.inner.len() + other.steps)))
+    }
+}
+
+impl Ord for Guess {
+    fn cmp(&self, other: &Self) -> Ordering {
+        (self.inner.len() + self.steps).cmp(&(other.inner.len() + other.steps))
+    }
+}
 
 #[derive(Clone, Debug)]
 struct Molecule {
@@ -9,28 +28,66 @@ struct Molecule {
 }
 
 impl Molecule {
-    fn replacements(&self) -> Vec<(usize, String, String)> {
+    fn replacements(&self) -> Vec<(isize, usize, String, String)> {
         let mut r = Vec::new();
+
         for (before, after) in self.rules.iter() {
+            let delta = after.len() as isize - before.len() as isize;
+
             let m = matches(&self.inner, before);
-            r.extend(m.into_iter().map(|i| (i, before.clone(), after.clone())));
+
+            r.extend(
+                m.into_iter()
+                    .map(|i| (delta, i, before.clone(), after.clone())),
+            );
         }
+
+        r.sort_by_key(|(delta, _, _, _)| *delta);
+
         r
     }
 
-    fn search(&mut self, steps: usize) -> Option<usize> {
-        if self.inner == self.target {
-            return Some(steps);
-        }
-        let replacements = self.replacements();
-        for (i, before, after) in replacements.into_iter() {
-            replace(&mut self.inner, i, &before, &after);
-            println!("({})\t{}", steps, self.inner);
-            if let Some(new_steps) = self.search(steps + 1) {
-                return Some(new_steps);
+    fn search(&mut self) -> Option<usize> {
+        // let mut lowest_visited = self.inner.clone();
+        let mut visited: HashSet<String> = HashSet::new();
+        let mut queue: BinaryHeap<Reverse<Guess>> = BinaryHeap::from([Reverse(Guess {
+            inner: self.inner.clone(),
+            steps: 0,
+        })]);
+        while !queue.is_empty() {
+            let Some(Reverse(guess)) = queue.pop() else {
+                break;
+            };
+            if guess.inner == self.target {
+                return Some(guess.steps);
             }
-            replace(&mut self.inner, i, &after, &before);
+            // if lowest_visited.len() > guess.inner.len() {
+            //     lowest_visited = guess.inner.clone();
+            //     println!(
+            //         "Queue: {}\nVisited: {}\nSteps: {}\nBest size: {}\nBest: {}\n\n",
+            //         queue.len(),
+            //         visited.len(),
+            //         guess.steps,
+            //         lowest_visited.len(),
+            //         lowest_visited
+            //     );
+            // }
+            self.inner = guess.inner;
+            let replacements = self.replacements();
+            for (_, i, before, after) in replacements.into_iter() {
+                let mut new_guess = Guess {
+                    inner: self.inner.clone(),
+                    steps: guess.steps + 1,
+                };
+                replace(&mut new_guess.inner, i, &before, &after);
+                if visited.contains(&new_guess.inner) {
+                    continue;
+                }
+                visited.insert(new_guess.inner.clone());
+                queue.push(Reverse(new_guess));
+            }
         }
+
         None
     }
 }
@@ -117,10 +174,6 @@ fn prune_graph(molecule: Molecule) -> HashMap<String, String> {
         .map(|&c| c)
         .collect();
 
-    println!(
-        "Inner {:?}\n\nTarget {:?}\n\nBad Chars {:?}",
-        inner_reachable, target_reachable, bad_chars
-    );
     molecule
         .rules
         .into_iter()
@@ -148,17 +201,33 @@ fn read_input(path: &str) -> Molecule {
     }
 }
 
+fn part_one(molecule: Molecule) -> usize {
+    let mut molecule = molecule;
+    molecule.rules = molecule
+        .rules
+        .clone()
+        .into_iter()
+        .map(|(k, v)| (v, k))
+        .collect();
+    let mut visited = HashSet::new();
+    for (_, i, b, a) in molecule.replacements() {
+        let mut candidate = molecule.inner.clone();
+        replace(&mut candidate, i, &b, &a);
+        visited.insert(candidate);
+    }
+    visited.len()
+}
+
 fn part_two(molecule: Molecule) -> usize {
     let mut molecule = molecule;
-    println!("Raw: {:?}", molecule.rules);
     molecule.rules = prune_graph(molecule.clone());
-    println!("Pruned: {:?}", molecule.rules);
-    molecule.search(0).expect("Must be a path")
+    molecule.search().expect("Must be a path")
 }
 
 fn main() {
     let molecule = read_input("input.txt");
-    println!("Part two: {}", part_two(molecule));
+    println!("Part one: {}", part_one(molecule.clone()));
+    println!("Part two: {}", part_two(molecule)); // Sometimes you get super lucky and A* finds the path like immediately (0.02 seconds)
 }
 
 #[cfg(test)]
