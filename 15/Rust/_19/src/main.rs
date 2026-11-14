@@ -48,7 +48,6 @@ impl Molecule {
     }
 
     fn search(&mut self) -> Option<usize> {
-        // let mut lowest_visited = self.inner.clone();
         let mut visited: HashSet<String> = HashSet::new();
         let mut queue: BinaryHeap<Reverse<Guess>> = BinaryHeap::from([Reverse(Guess {
             inner: self.inner.clone(),
@@ -61,17 +60,6 @@ impl Molecule {
             if guess.inner == self.target {
                 return Some(guess.steps);
             }
-            // if lowest_visited.len() > guess.inner.len() {
-            //     lowest_visited = guess.inner.clone();
-            //     println!(
-            //         "Queue: {}\nVisited: {}\nSteps: {}\nBest size: {}\nBest: {}\n\n",
-            //         queue.len(),
-            //         visited.len(),
-            //         guess.steps,
-            //         lowest_visited.len(),
-            //         lowest_visited
-            //     );
-            // }
             self.inner = guess.inner;
             let replacements = self.replacements();
             for (_, i, before, after) in replacements.into_iter() {
@@ -110,33 +98,6 @@ fn replace(s: &mut String, i: usize, before: &str, after: &str) {
 }
 
 fn chars_reachable(start: &String, h: &HashMap<String, String>) -> HashSet<char> {
-    print!("{} -> ", start);
-
-    /*
-     * 1. Start with e, branch out to as many chars as you can
-     * 2. Start with *target*, branch out to as many chars as you can
-     * 2. Take the intersection of #1 and #2
-     * 3. Prune all kv pairs that contain a letter in the intersection
-     *
-     * abc -> d
-     * dd -> e
-     *
-     * input: abzabz
-     * abz -> f
-     * z -> g
-     * ff -> e
-     *
-     * e -> ff
-     * f -> abz
-     * {efabz}
-     * for k, v in h {
-     *  if !v.chars().all(* in reachable *) {
-     *      *prune*
-     * }
-     * }
-     *
-     * for all keys, do any contain d. If yes, do
-     */
     let mut reachable_chars = HashSet::new();
     reachable_chars.extend(start.chars());
     let mut new_reach = true;
