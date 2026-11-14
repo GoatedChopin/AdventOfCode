@@ -118,33 +118,6 @@ fn chars_reachable(start: &String, h: &HashMap<String, String>) -> HashSet<char>
     reachable_chars
 }
 
-fn prune_graph(molecule: Molecule) -> HashMap<String, String> {
-    let inner_reachable = chars_reachable(&molecule.inner, &molecule.rules.clone());
-    let target_reachable = chars_reachable(
-        &molecule.target,
-        &molecule
-            .rules
-            .clone()
-            .into_iter()
-            .map(|(k, v)| (v, k))
-            .collect(),
-    );
-
-    let bad_chars: HashSet<char> = inner_reachable
-        .symmetric_difference(&target_reachable)
-        .map(|&c| c)
-        .collect();
-
-    molecule
-        .rules
-        .into_iter()
-        .filter(|(before, after)| {
-            before.chars().all(|c| !bad_chars.contains(&c))
-                && after.chars().all(|c| !bad_chars.contains(&c))
-        })
-        .collect()
-}
-
 fn read_input(path: &str) -> Molecule {
     let s = fs::read_to_string(path).expect("Input file must exist");
     let (rules_raw, input) = s.split_once("\n\n").expect("Input must have two parts");
@@ -176,14 +149,13 @@ fn part_one(molecule: Molecule) -> usize {
 
 fn part_two(molecule: Molecule) -> usize {
     let mut molecule = molecule;
-    molecule.rules = prune_graph(molecule.clone());
     molecule.search().expect("Must be a path")
 }
 
 fn main() {
     let molecule = read_input("input.txt");
     println!("Part one: {}", part_one(molecule.clone()));
-    println!("Part two: {}", part_two(molecule)); // Sometimes you get super lucky and A* finds the path like immediately (0.02 seconds)
+    println!("Part two: {}", part_two(molecule)); // Sometimes you get super lucky and A* finds the path like immediately (0.01 seconds)
 }
 
 #[cfg(test)]
