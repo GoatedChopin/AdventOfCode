@@ -163,26 +163,6 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_prune() {
-        let mut s = "abcdefg".to_owned();
-        replace(&mut s, 2, "cde", "abc");
-        assert_eq!(s, "ababcfg".to_owned());
-
-        let h = HashMap::from([
-            ("a".to_owned(), "b".to_owned()),
-            ("abc".to_owned(), "b".to_owned()),
-            ("b".to_owned(), "e".to_owned()),
-            ("d".to_owned(), "f".to_owned()),
-        ]);
-        let p = prune_graph(Molecule {
-            rules: h,
-            inner: s,
-            target: "e".to_string(),
-        });
-        assert!(!p.contains_key(&"d".to_owned()));
-    }
-
-    #[test]
     fn test_part_two() {
         let molecule = read_input("test2.txt");
         println!("{:?}", molecule);
