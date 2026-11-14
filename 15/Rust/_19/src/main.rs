@@ -202,18 +202,13 @@ fn read_input(path: &str) -> Molecule {
 }
 
 fn part_one(molecule: Molecule) -> usize {
-    let mut molecule = molecule;
-    molecule.rules = molecule
-        .rules
-        .clone()
-        .into_iter()
-        .map(|(k, v)| (v, k))
-        .collect();
     let mut visited = HashSet::new();
-    for (_, i, b, a) in molecule.replacements() {
-        let mut candidate = molecule.inner.clone();
-        replace(&mut candidate, i, &b, &a);
-        visited.insert(candidate);
+    for (after, before) in molecule.rules.iter() {
+        for i in matches(&molecule.inner, before) {
+            let mut candidate = molecule.inner.clone();
+            replace(&mut candidate, i, before, after);
+            visited.insert(candidate);
+        }
     }
     visited.len()
 }
