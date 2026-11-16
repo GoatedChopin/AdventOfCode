@@ -77,188 +77,113 @@ fn part_one(input: &HashMap<String, Vec<String>>) -> String {
 // 2. For each node, track whether the path so far is balanced or unbalanced using a boolean flag
 // 3. If the parent is unbalanced and the children are balanced, return the current node's weight and depth
 
-fn is_balanced(
-    input: &HashMap<String, Vec<String>>,
-    weights: &HashMap<String, usize>,
-    key: &String,
-    depth: usize,
-) -> bool {
-    let children = input.get(key).unwrap();
-    let mut child_weights = HashMap::new();
-    for child in children.clone() {
-        let new_weight = weights.get(&child).unwrap();
-        let child_weight = get_weight(input, weights, &child, *new_weight, depth + 1);
-        child_weights.insert(child, child_weight);
+fn weight(s: &String, data: &Data) -> usize {
+    let mut out = 0;
+    if let Some(w) = data.weights.get(s) {
+        out += *w;
     }
-    for (child1, weight) in child_weights.clone() {
-        for (child2, weight2) in child_weights.clone() {
-            if child1 == child2 {
+    if let Some(children) = data.connections.get(s) {
+        out += children.iter().map(|c| weight(c, data)).sum::<usize>();
+    }
+    out
+}
+
+fn is_balanced(start: &String, data: &Data) -> bool {
+    match data.connections.get(start) {
+        Some(children) => {
+            let weights: Vec<usize> = children.iter().map(|c| weight(c, data)).collect();
+            if weights.is_empty() {
+                return true;
+            }
+            let w = weights[0];
+            weights.into_iter().all(|c| c == w)
+        }
+        None => true,
+    }
+}
+
+fn part_two(data: Data) -> usize {
+    let root = part_one(&data.connections.clone());
+    let mut queue = VecDeque::from([root]);
+    while !queue.is_empty() {
+        let Some(current) = queue.pop_front() else {
+            continue;
+        };
+        if is_balanced(&current, &data) {
+            continue;
+        }
+        let Some(children) = data.connections.get(&current) else {
+            continue;
+        };
+        children
+            .iter()
+            .for_each(|child| queue.push_back(child.clone()));
+        let children_balanced: Vec<bool> = children.iter().map(|c| is_balanced(c, &data)).collect();
+        if children_balanced.iter().all(|c| *c) {
+            // We found the right part, all children are balanced in their subtrees, but the parent is not. One must be adjusted.
+            let sums: Vec<usize> = children.iter().map(|c| weight(c, &data)).collect();
+            let distinct_sums: HashMap<usize, usize> =
+                sums.iter().fold(HashMap::new(), |mut acc, sum| {
+                    match acc.get_mut(sum) {
+                        Some(count) => {
+                            *count += 1;
+                        }
+                        None => {
+                            acc.insert(*sum, 1);
+                        }
+                    }
+                    return acc;
+                });
+            let Some(bad_sum) = distinct_sums
+                .iter()
+                .filter_map(|(sum, count)| if *count == 1 { Some(*sum) } else { None })
+                .collect::<Vec<usize>>()
+                .pop()
+            else {
                 continue;
-            }
-            if weight != weight2 {
-                // println!(
-                //     "Unbalanced Child: {} -> {} vs {} -> {}",
-                //     child1, weight, child2, weight2
-                // );
-                return false;
-            }
-        }
-    }
-    return true;
-}
-
-struct QueueItem {
-    node: String,
-    depth: usize,
-    parent_is_balanced: bool,
-}
-
-fn get_nodes_at_depth(
-    input: &HashMap<String, Vec<String>>,
-    weights: &HashMap<String, usize>,
-    key: &String,
-    depth: usize,
-    current_depth: usize,
-) -> Vec<String> {
-    let mut nodes = Vec::new();
-    let children = input.get(key).unwrap();
-    for child in children.clone() {
-        if current_depth == depth {
-            nodes.push(child.clone());
-        }
-        nodes.extend(get_nodes_at_depth(
-            input,
-            weights,
-            &child,
-            depth,
-            current_depth + 1,
-        ));
-    }
-    // for node in nodes.clone() {
-    //     println!(
-    //         "{} Node: {} -> {} + {} = {}",
-    //         depth,
-    //         node,
-    //         weights.get(&node).unwrap(),
-    //         get_weight(input, weights, &node, 0, depth),
-    //         get_weight(input, weights, &node, 0, depth) + weights.get(&node).unwrap()
-    //     );
-    // }
-    nodes
-}
-fn part_two(
-    input: &HashMap<String, Vec<String>>,
-    weights: &HashMap<String, usize>,
-    root: String,
-) -> usize {
-    let mut depth = 0;
-    // let mut unbalanced_node: String = "".to_string();
-    // let mut unbalanced_weight: usize = 0;
-    let mut current_node = root.clone();
-    let mut queue = VecDeque::new();
-    // let mut depth_balance_map = HashMap::new();
-    let mut parent_is_balanced = false;
-    let mut children_are_balanced: bool;
-    queue.push_back(QueueItem {
-        node: current_node.clone(),
-        depth: depth,
-        parent_is_balanced: parent_is_balanced,
-    });
-    while queue.len() > 0 {
-        let item = queue.pop_front().unwrap(); // Needs to pop_back or pop_left so we are doing BFS
-        current_node = item.node;
-        depth = item.depth;
-        parent_is_balanced = item.parent_is_balanced;
-        children_are_balanced = true;
-        let children = input.get(&current_node).unwrap();
-        for child in children.clone() {
-            children_are_balanced =
-                children_are_balanced && is_balanced(input, weights, &child, depth + 1);
-            queue.push_back(QueueItem {
-                node: child.clone(),
-                depth: depth + 1,
-                parent_is_balanced: is_balanced(input, weights, &current_node, depth + 1),
-            });
-        }
-        if !parent_is_balanced {
-          println!(
-              "Current node: {}, Parent is balanced: {}, Children are balanced: {} - {}",
-              current_node, parent_is_balanced, children_are_balanced, depth
-          );
-        }
-        if !parent_is_balanced && children_are_balanced {
-            // println!("Found unbalanced node: {}", current_node);
-            let nodes = get_nodes_at_depth(input, weights, &current_node, depth, 0);
-            let mut self_weights = HashMap::new();
-            let mut child_weights = HashMap::new();
-            let mut votes = HashMap::new();
-            let mut expected_weight = 0;
-            for node in nodes.clone() {
-                let weight = weights.get(&node).unwrap();
-                let child_weight = get_weight(input, weights, &node, 0, depth);
-                // vote on what the weight of each child node should be
-                self_weights.entry(node.clone()).or_insert(weight);
-                child_weights.entry(node.clone()).or_insert(child_weight);
-                votes.entry(weight + child_weight).or_insert(0);
-                votes.insert(
-                    weight + child_weight,
-                    votes.get(&(*weight + child_weight)).unwrap() + 1,
-                );
-                if *votes.get(&(weight + child_weight)).unwrap() > 1 {
-                    expected_weight = weight + child_weight;
-                }
-            }
-            for node in nodes.clone() {
-                let weight = self_weights.get(&node).unwrap();
-                let child_weight = child_weights.get(&node).unwrap();
-                if *votes.get(&(*weight + child_weight)).unwrap() > 1 {
+            };
+            let Some(good_sum) = distinct_sums
+                .iter()
+                .filter_map(|(sum, count)| if *count > 1 { Some(*sum) } else { None })
+                .collect::<Vec<usize>>()
+                .pop()
+            else {
+                continue;
+            };
+            for (sum, child) in sums.iter().zip(children.iter()) {
+                if *sum == good_sum {
                     continue;
                 }
-                // adjust the weight of the current node to the expected weight
-                let new_weight = expected_weight - child_weight;
-                return new_weight;
+                let Some(bad_weight) = data.weights.get(child) else {
+                    continue;
+                };
+                println!("Vars {}, {}, {}", good_sum, bad_sum, bad_weight);
+                match good_sum > bad_sum {
+                    true => return (good_sum - bad_sum) + bad_weight,
+                    false => return bad_weight - (bad_sum - good_sum),
+                }
             }
         }
     }
-    println!("No unbalanced node found");
-    return 0;
-}
-
-fn get_weight(
-    input: &HashMap<String, Vec<String>>,
-    weights: &HashMap<String, usize>,
-    key: &String,
-    starting_weight: usize,
-    depth: usize,
-) -> usize {
-    let mut total_weight = starting_weight;
-    let children = input.get(key).unwrap();
-    for child in children.clone() {
-        let new_weight = weights.get(&child).unwrap();
-        let child_weight = get_weight(input, weights, &child, *new_weight, depth + 1);
-        total_weight += child_weight;
-    }
-    return total_weight;
+    panic!();
 }
 
 fn main() {
-    test();
     let data = read_input("input.txt");
     let root = part_one(&data.connections);
     println!("Part one: {}", root.clone());
-    println!(
-        "Part two: {}",
-        part_two(&data.connections, &data.weights, root)
-    );
+    println!("Part two: {}", part_two(data));
 }
 
-fn test() {
-    println!("Testing...");
-    let input = read_input("test.txt");
+#[cfg(test)]
+mod test {
+    use super::*;
 
-    panic!("Not working yet");
-    let root = part_one(&input.connections);
-    assert_eq!(root.clone(), "tknk");
-    assert_eq!(part_two(&input.connections, &input.weights, root), 60);
-    println!("Test passed");
+    #[test]
+    fn test_both_parts() {
+        let input = read_input("test.txt");
+        let root = part_one(&input.connections);
+        assert_eq!(root.clone(), "tknk");
+        assert_eq!(part_two(input), 60);
+    }
 }
