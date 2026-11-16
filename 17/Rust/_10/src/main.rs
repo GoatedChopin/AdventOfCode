@@ -1,4 +1,4 @@
-use std::collections::{HashSet, VecDeque};
+use std::collections::HashSet;
 use std::fs;
 
 fn read_input(path: &str) -> Vec<usize> {
@@ -11,31 +11,21 @@ fn read_input(path: &str) -> Vec<usize> {
         .collect()
 }
 
-fn get_index(i: usize, list: &VecDeque<usize>) -> usize {
-    if i >= list.len() { i % list.len() } else { i }
+fn get_index(i: usize, list: &Vec<usize>) -> usize {
+    i % list.len()
 }
 
-fn twist(list: &mut VecDeque<usize>, length: usize, current_position: usize) {
-    let mut visited = HashSet::new();
-    for i in current_position..current_position + (length.saturating_sub(2)) {
-        let left = get_index(i, &list);
-        let right = get_index(
-            current_position + length - 1 - (i - current_position),
-            &list,
-        );
-        if visited.contains(&left) || visited.contains(&right) {
-            continue;
-        }
-        visited.insert(left);
-        visited.insert(right);
-        // println!("Swapping {} <-> {}", left, right);
+fn twist(list: &mut Vec<usize>, length: usize, current_position: usize) {
+    for i in 0..length / 2 {
+        let left = (current_position + i) % list.len();
+        let right = (current_position + length - 1 - i) % list.len();
+
         list.swap(left, right);
-        // println!("{:?}", list);
     }
 }
 
-fn part_one(input: &Vec<usize>, ring_size: usize) -> usize {
-    let mut list = (0..=ring_size).collect::<VecDeque<usize>>();
+fn part_one(input: &[usize], ring_size: usize) -> usize {
+    let mut list = (0..=ring_size).collect::<Vec<usize>>();
     let mut current = 0;
     let mut skip = 0;
     for length in input {
@@ -46,11 +36,11 @@ fn part_one(input: &Vec<usize>, ring_size: usize) -> usize {
     list[0] * list[1]
 }
 
-fn convert_to_ascii(input: String) -> Vec<u8> {
+fn convert_to_ascii(input: &str) -> Vec<u8> {
     input.bytes().collect()
 }
 
-fn compute_dense_hashes(list: &VecDeque<usize>) -> Vec<usize> {
+fn compute_dense_hashes(list: &Vec<usize>) -> Vec<usize> {
     let mut out = Vec::new();
     for i in (0..list.len()).step_by(16) {
         let mut dense = list[i];
@@ -66,7 +56,7 @@ fn part_two(input: &Vec<u8>) -> String {
     let mut input = input.clone();
     input.extend([17, 31, 73, 47, 23].iter());
     let input: Vec<usize> = input.into_iter().map(|i| i.into()).collect();
-    let mut list = (0..=255).collect::<VecDeque<usize>>();
+    let mut list = (0..=255).collect::<Vec<usize>>();
     let mut current = 0;
     let mut skip = 0;
     for _ in 0..64 {
@@ -87,8 +77,7 @@ fn main() {
     let input = convert_to_ascii(
         fs::read_to_string("input.txt")
             .expect("Input file must exist")
-            .trim()
-            .to_string(),
+            .trim(),
     );
     println!("Part two: {}", part_two(&input));
 }
@@ -107,7 +96,7 @@ mod test {
             [3, 4, 2, 1, 0],
         ];
 
-        let mut list = (0..=4).collect::<VecDeque<usize>>();
+        let mut list = (0..=4).collect::<Vec<usize>>();
         let mut current = 0;
         let mut skip = 0;
         for (i, length) in input.iter().enumerate() {
@@ -127,29 +116,29 @@ mod test {
 
     #[test]
     fn test_to_ascii() {
-        let v = convert_to_ascii("1,2,3".to_owned());
+        let v = convert_to_ascii("1,2,3");
         assert_eq!(v, Vec::from([49, 44, 50, 44, 51]));
     }
 
     #[test]
     fn test_part_two() {
         assert_eq!(
-            part_two(&convert_to_ascii("".to_string())),
+            part_two(&convert_to_ascii("")),
             "a2582a3a0e66e6e86e3812dcb672a272".to_string()
         );
 
         assert_eq!(
-            part_two(&convert_to_ascii("AoC 2017".to_string())),
+            part_two(&convert_to_ascii("AoC 2017")),
             "33efeb34ea91902bb2f59c9920caa6cd".to_string()
         );
 
         assert_eq!(
-            part_two(&convert_to_ascii("1,2,3".to_string())),
+            part_two(&convert_to_ascii("1,2,3")),
             "3efbe78a8d82f29979031a4aa0b16a9d".to_string()
         );
 
         assert_eq!(
-            part_two(&convert_to_ascii("1,2,4".to_string())),
+            part_two(&convert_to_ascii("1,2,4")),
             "63960835bcdc130f0b66d7ff4f6a5a8e".to_string()
         );
     }
