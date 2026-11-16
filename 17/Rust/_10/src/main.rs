@@ -28,9 +28,9 @@ fn twist(list: &mut VecDeque<usize>, length: usize, current_position: usize) {
         }
         visited.insert(left);
         visited.insert(right);
-        println!("Swapping {} <-> {}", left, right);
+        // println!("Swapping {} <-> {}", left, right);
         list.swap(left, right);
-        println!("{:?}", list);
+        // println!("{:?}", list);
     }
 }
 
@@ -46,9 +46,51 @@ fn part_one(input: &Vec<usize>, ring_size: usize) -> usize {
     list[0] * list[1]
 }
 
+fn convert_to_ascii(input: String) -> Vec<u8> {
+    input.bytes().collect()
+}
+
+fn compute_dense_hashes(list: &VecDeque<usize>) -> Vec<usize> {
+    let mut out = Vec::new();
+    for i in (0..list.len()).step_by(16) {
+        let mut dense = list[i];
+        for j in i + 1..i + 16 {
+            dense ^= list[j];
+        }
+        out.push(dense);
+    }
+    out
+}
+
+fn part_two(input: &Vec<u8>) -> String {
+    let mut input = input.clone();
+    input.extend([17, 31, 73, 47, 23].iter());
+    let input: Vec<usize> = input.into_iter().map(|i| i.into()).collect();
+    let mut list = (0..=255).collect::<VecDeque<usize>>();
+    let mut current = 0;
+    let mut skip = 0;
+    for _ in 0..64 {
+        for length in input.iter() {
+            twist(&mut list, *length, current);
+            current = get_index(current + length + skip, &list);
+            skip += 1;
+        }
+    }
+    let dense_hashes = compute_dense_hashes(&list);
+
+    dense_hashes.iter().map(|d| format!("{:02x}", d)).collect()
+}
+
 fn main() {
     let input = read_input("input.txt");
     println!("Part one: {}", part_one(&input, 255));
+    let input = convert_to_ascii(
+        fs::read_to_string("input.txt")
+            .expect("Input file must exist")
+            .trim()
+            .to_string(),
+    );
+    println!("Part two: {}", part_two(&input));
 }
 
 #[cfg(test)]
@@ -81,5 +123,34 @@ mod test {
         assert_eq!(list[0] * list[1], 12);
 
         assert_eq!(part_one(&input, 4), 12);
+    }
+
+    #[test]
+    fn test_to_ascii() {
+        let v = convert_to_ascii("1,2,3".to_owned());
+        assert_eq!(v, Vec::from([49, 44, 50, 44, 51]));
+    }
+
+    #[test]
+    fn test_part_two() {
+        assert_eq!(
+            part_two(&convert_to_ascii("".to_string())),
+            "a2582a3a0e66e6e86e3812dcb672a272".to_string()
+        );
+
+        assert_eq!(
+            part_two(&convert_to_ascii("AoC 2017".to_string())),
+            "33efeb34ea91902bb2f59c9920caa6cd".to_string()
+        );
+
+        assert_eq!(
+            part_two(&convert_to_ascii("1,2,3".to_string())),
+            "3efbe78a8d82f29979031a4aa0b16a9d".to_string()
+        );
+
+        assert_eq!(
+            part_two(&convert_to_ascii("1,2,4".to_string())),
+            "63960835bcdc130f0b66d7ff4f6a5a8e".to_string()
+        );
     }
 }
