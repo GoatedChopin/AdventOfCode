@@ -2,8 +2,6 @@ use std::cmp::{Ordering, Reverse};
 use std::collections::{BinaryHeap, HashSet};
 use std::fs;
 
-const DIAGONAL_UNIT: isize = 7; // 1/2
-
 #[derive(Clone, Copy)]
 enum HexDir {
     North,
@@ -46,44 +44,36 @@ impl Into<HexCoordinate> for HexDir {
     fn into(self) -> HexCoordinate {
         use HexDir::*;
         match self {
-            North => HexCoordinate { x: 0, y: 10 },
-            NorthEast => HexCoordinate {
-                x: DIAGONAL_UNIT,
-                y: DIAGONAL_UNIT,
-            },
-            SouthEast => HexCoordinate {
-                x: DIAGONAL_UNIT,
-                y: -DIAGONAL_UNIT,
-            },
-            South => HexCoordinate { x: 0, y: -10 },
-            SouthWest => HexCoordinate {
-                x: -DIAGONAL_UNIT,
-                y: -DIAGONAL_UNIT,
-            },
-            NorthWest => HexCoordinate {
-                x: -DIAGONAL_UNIT,
-                y: DIAGONAL_UNIT,
-            },
+            North => HexCoordinate { q: 1, r: -1 },
+            NorthEast => HexCoordinate { q: 1, r: 0 },
+            SouthEast => HexCoordinate { q: 0, r: 1 },
+            South => HexCoordinate { q: -1, r: 1 },
+            SouthWest => HexCoordinate { q: -1, r: 0 },
+            NorthWest => HexCoordinate { q: 0, r: -1 },
         }
     }
 }
 
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
 struct HexCoordinate {
-    x: isize,
-    y: isize,
+    q: isize,
+    r: isize,
 }
 
 impl HexCoordinate {
+    fn s(&self) -> isize {
+        0 - self.q - self.r
+    }
+
     fn distance(&self, other: HexCoordinate) -> usize {
-        return self.x.abs_diff(other.x) + self.y.abs_diff(other.y);
+        return self.q.abs_diff(other.q) + self.r.abs_diff(other.r);
     }
 
     fn move_by(&self, dir: HexDir) -> Self {
         let dir_coord: HexCoordinate = dir.into();
         Self {
-            x: dir_coord.x + self.x,
-            y: dir_coord.x + self.y,
+            q: dir_coord.q + self.q,
+            r: dir_coord.r + self.r,
         }
     }
 }
@@ -125,20 +115,10 @@ fn a_star(start: HexCoordinate, target: HexCoordinate) -> usize {
         steps: 0,
     })]);
     let mut visited = HashSet::new();
-    let mut max_steps = 0;
     while !queue.is_empty() {
         let Some(Reverse(current)) = queue.pop() else {
             continue;
         };
-        if current.steps > max_steps {
-            max_steps = current.steps;
-            println!(
-                "Visited {} nodes, {} unexplored. max steps is {}",
-                visited.len(),
-                queue.len(),
-                max_steps
-            )
-        }
         if current.coordinate == current.target {
             return current.steps;
         }
@@ -158,8 +138,8 @@ fn a_star(start: HexCoordinate, target: HexCoordinate) -> usize {
     panic!();
 }
 
-fn follow_directions(directions: &Vec<HexDir>) -> HexCoordinate {
-    let mut current = HexCoordinate { x: 0, y: 0 };
+fn follow_directions(directions: &[HexDir]) -> HexCoordinate {
+    let mut current = HexCoordinate { q: 0, r: 0 };
     for direction in directions {
         current = current.move_by(*direction);
     }
@@ -175,13 +155,24 @@ fn read_input(path: &str) -> Vec<HexDir> {
 }
 
 fn part_one(directions: &Vec<HexDir>) -> usize {
-    let start = HexCoordinate { x: 0, y: 0 };
+    let start = HexCoordinate { q: 0, r: 0 };
     let target = follow_directions(directions);
     println!("{:?} -> {:?}", start, target);
     a_star(start, target)
 }
 
+fn part_two(directions: &Vec<HexDir>) -> usize {
+    let start = HexCoordinate { q: 0, r: 0 };
+    let mut max_distance = 0;
+    for i in 0..=directions.len() {
+        let target = follow_directions(&directions[0..i]);
+        max_distance = max_distance.max(a_star(start, target));
+    }
+    max_distance
+}
+
 fn main() {
     let directions = read_input("input.txt");
     println!("Part one: {}", part_one(&directions));
+    println!("Part two: {}", part_two(&directions));
 }
