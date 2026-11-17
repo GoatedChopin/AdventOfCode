@@ -1,9 +1,8 @@
-use std::cmp::Ordering;
+use std::cmp::{Ordering, Reverse};
 use std::collections::{BinaryHeap, HashSet};
 use std::fs;
 
-const DIAGONAL_UNIT_X: f64 = 0.87; // sqrt(3)/2
-const DIAGONAL_UNIT_Y: f64 = 0.5; // 1/2
+const DIAGONAL_UNIT: isize = 7; // 1/2
 
 #[derive(Clone, Copy)]
 enum HexDir {
@@ -47,36 +46,44 @@ impl Into<HexCoordinate> for HexDir {
     fn into(self) -> HexCoordinate {
         use HexDir::*;
         match self {
-            North => HexCoordinate { q: 1, r: -1 },
-            NorthEast => HexCoordinate { q: 1, r: 0 },
-            SouthEast => HexCoordinate { q: 0, r: 1 },
-            South => HexCoordinate { q: -1, r: 1 },
-            SouthWest => HexCoordinate { q: -1, r: 0 },
-            NorthWest => HexCoordinate { q: 0, r: -1 },
+            North => HexCoordinate { x: 0, y: 10 },
+            NorthEast => HexCoordinate {
+                x: DIAGONAL_UNIT,
+                y: DIAGONAL_UNIT,
+            },
+            SouthEast => HexCoordinate {
+                x: DIAGONAL_UNIT,
+                y: -DIAGONAL_UNIT,
+            },
+            South => HexCoordinate { x: 0, y: -10 },
+            SouthWest => HexCoordinate {
+                x: -DIAGONAL_UNIT,
+                y: -DIAGONAL_UNIT,
+            },
+            NorthWest => HexCoordinate {
+                x: -DIAGONAL_UNIT,
+                y: DIAGONAL_UNIT,
+            },
         }
     }
 }
 
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
 struct HexCoordinate {
-    q: isize,
-    r: isize,
+    x: isize,
+    y: isize,
 }
 
 impl HexCoordinate {
-    fn s(&self) -> isize {
-        0 - self.q - self.r
-    }
-
     fn distance(&self, other: HexCoordinate) -> usize {
-        return self.q.abs_diff(other.q) + self.r.abs_diff(other.r);
+        return self.x.abs_diff(other.x) + self.y.abs_diff(other.y);
     }
 
     fn move_by(&self, dir: HexDir) -> Self {
         let dir_coord: HexCoordinate = dir.into();
         Self {
-            q: dir_coord.q + self.q,
-            r: dir_coord.r + self.r,
+            x: dir_coord.x + self.x,
+            y: dir_coord.x + self.y,
         }
     }
 }
@@ -112,26 +119,26 @@ impl Ord for SearchNode {
 }
 
 fn a_star(start: HexCoordinate, target: HexCoordinate) -> usize {
-    let mut queue = BinaryHeap::from([SearchNode {
+    let mut queue = BinaryHeap::from([Reverse(SearchNode {
         coordinate: start,
         target,
         steps: 0,
-    }]);
+    })]);
     let mut visited = HashSet::new();
     let mut max_steps = 0;
     while !queue.is_empty() {
-        let Some(current) = queue.pop() else {
+        let Some(Reverse(current)) = queue.pop() else {
             continue;
         };
-        // if current.steps > max_steps {
-        //     max_steps = current.steps;
-        //     println!(
-        //         "Visited {} nodes, {} unexplored. max steps is {}",
-        //         visited.len(),
-        //         queue.len(),
-        //         max_steps
-        //     )
-        // }
+        if current.steps > max_steps {
+            max_steps = current.steps;
+            println!(
+                "Visited {} nodes, {} unexplored. max steps is {}",
+                visited.len(),
+                queue.len(),
+                max_steps
+            )
+        }
         if current.coordinate == current.target {
             return current.steps;
         }
@@ -141,18 +148,18 @@ fn a_star(start: HexCoordinate, target: HexCoordinate) -> usize {
                 continue;
             }
             visited.insert(new_coord);
-            queue.push(SearchNode {
+            queue.push(Reverse(SearchNode {
                 steps: current.steps + 1,
                 coordinate: new_coord,
                 target,
-            });
+            }));
         }
     }
     panic!();
 }
 
 fn follow_directions(directions: &Vec<HexDir>) -> HexCoordinate {
-    let mut current = HexCoordinate { q: 0, r: 0 };
+    let mut current = HexCoordinate { x: 0, y: 0 };
     for direction in directions {
         current = current.move_by(*direction);
     }
@@ -168,7 +175,7 @@ fn read_input(path: &str) -> Vec<HexDir> {
 }
 
 fn part_one(directions: &Vec<HexDir>) -> usize {
-    let start = HexCoordinate { q: 0, r: 0 };
+    let start = HexCoordinate { x: 0, y: 0 };
     let target = follow_directions(directions);
     println!("{:?} -> {:?}", start, target);
     a_star(start, target)
