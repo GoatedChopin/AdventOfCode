@@ -127,26 +127,15 @@ fn part_two(firewall: Firewall) -> isize {
         return 0;
     };
     let mut delay = -1;
-    let mut error = false;
     loop {
-        if delay % 10000 == 0 {
-            println!("Delay {}", delay);
-        }
-        delay += 1;
-        let mut current_firewall = firewall.clone();
-        for _ in 0..delay {
-            current_firewall.delay();
-        }
-        for _ in 0..=(max_scanner + 1) {
-            if current_firewall.step().is_err() {
-                error = true;
-                break;
-            }
-        }
-        if !error {
+        let caught = firewall.scanners.iter().any(|(index, scanner)| {
+            let period = 2 * (scanner.size - 1);
+            (delay + index) % period == 0
+        });
+        if !caught {
             break;
         }
-        error = false;
+        delay += 1
     }
     delay
 }
