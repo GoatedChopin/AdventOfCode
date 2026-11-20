@@ -1,18 +1,3 @@
-use std::collections::HashSet;
-use std::fs;
-
-use crate::generate_grid;
-
-fn read_input(path: &str) -> Vec<usize> {
-    fs::read_to_string(path)
-        .unwrap()
-        .trim()
-        .to_string()
-        .split(",")
-        .map(|x| x.parse::<usize>().unwrap())
-        .collect()
-}
-
 fn get_index(i: usize, list: &Vec<usize>) -> usize {
     i % list.len()
 }
@@ -36,10 +21,6 @@ fn part_one(input: &[usize], ring_size: usize) -> usize {
         skip += 1;
     }
     list[0] * list[1]
-}
-
-fn convert_to_ascii(input: &str) -> Vec<u8> {
-    input.bytes().collect()
 }
 
 fn compute_dense_hashes(list: &Vec<usize>) -> Vec<usize> {
@@ -71,77 +52,4 @@ pub fn hash(input: &Vec<u8>) -> String {
     let dense_hashes = compute_dense_hashes(&list);
 
     dense_hashes.iter().map(|d| format!("{:02x}", d)).collect()
-}
-
-fn main() {
-    let input = read_input("input.txt");
-    println!("Part one: {}", part_one(&input, 255));
-    let input = convert_to_ascii(
-        fs::read_to_string("input.txt")
-            .expect("Input file must exist")
-            .trim(),
-    );
-    println!("Part two: {}", hash(&input));
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn test_part_one() {
-        let input = read_input("test.txt");
-        let outcomes: [[usize; 5]; 4] = [
-            [2, 1, 0, 3, 4],
-            [4, 3, 0, 1, 2],
-            [4, 3, 0, 1, 2],
-            [3, 4, 2, 1, 0],
-        ];
-
-        let mut list = (0..=4).collect::<Vec<usize>>();
-        let mut current = 0;
-        let mut skip = 0;
-        for (i, length) in input.iter().enumerate() {
-            println!("Twisting {} from {} with skip {}", *length, current, skip);
-            twist(&mut list, *length, current);
-            for (mi, mu) in outcomes[i].iter().enumerate() {
-                println!("Expected\t{:?}\nGot\t\t{:?}\n\n", outcomes[i], list);
-                assert_eq!(*mu, list[mi]);
-            }
-            current = get_index(current + length + skip, &list);
-            skip += 1;
-        }
-        assert_eq!(list[0] * list[1], 12);
-
-        assert_eq!(part_one(&input, 4), 12);
-    }
-
-    #[test]
-    fn test_to_ascii() {
-        let v = convert_to_ascii("1,2,3");
-        assert_eq!(v, Vec::from([49, 44, 50, 44, 51]));
-    }
-
-    #[test]
-    fn test_part_two() {
-        assert_eq!(
-            hash(&convert_to_ascii("")),
-            "a2582a3a0e66e6e86e3812dcb672a272".to_string()
-        );
-
-        assert_eq!(
-            hash(&convert_to_ascii("AoC 2017")),
-            "33efeb34ea91902bb2f59c9920caa6cd".to_string()
-        );
-
-        assert_eq!(
-            hash(&convert_to_ascii("1,2,3")),
-            "3efbe78a8d82f29979031a4aa0b16a9d".to_string()
-        );
-
-        assert_eq!(
-            hash(&convert_to_ascii("1,2,4")),
-            "63960835bcdc130f0b66d7ff4f6a5a8e".to_string()
-        );
-    }
 }
