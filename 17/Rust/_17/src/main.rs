@@ -89,6 +89,6 @@ mod test {
     #[test]
     fn test_part_two() {
         let spinlock = Spinlock::new(3);
-        assert_eq!(part_two(spinlock, 9), 0);
+        assert_eq!(part_two(spinlock, 9), 9);
     }
 }
