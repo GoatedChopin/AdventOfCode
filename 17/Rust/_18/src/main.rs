@@ -404,7 +404,17 @@ fn read_input(path: &str) -> Emulator<isize> {
 }
 
 fn part_one(emulator: Emulator<isize>) -> isize {
-    0
+    let mut emulator = emulator;
+    loop {
+        if let Some(value) = (match emulator.execute_next_instruction() {
+            Some(outcome) => match outcome {
+                Execution::Receive(i) => Some(i),
+            },
+            None => None,
+        }) {
+            return value;
+        }
+    }
 }
 
 fn main() {
