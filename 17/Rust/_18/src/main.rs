@@ -5,17 +5,19 @@ use std::ops::{Add, Mul, Rem};
 
 enum Execution<T> {
     Receive(T),
+    Halted,
 }
 
 #[derive(Clone)]
 struct Emulator<T> {
     registers: HashMap<char, Register<T>>,
     instructions: Vec<Instruction<T>>,
-    stack_pointer: usize,
+    stack_pointer: isize,
+    history: Vec<T>,
 }
 
 impl<
-    T: TryInto<usize>
+    T: TryInto<isize>
         + PartialEq
         + Eq
         + PartialOrd
@@ -34,7 +36,12 @@ impl<
 
     fn execute_next_instruction(&mut self) -> Option<Execution<T>> {
         use Instruction::*;
-        let instruction = self.instructions[self.stack_pointer];
+        let instruction_index = self.stack_pointer as usize;
+        if instruction_index >= self.instructions.len() {
+            return Some(Execution::Halted);
+        }
+        let instruction = self.instructions[instruction_index];
+        self.stack_pointer += 1;
         match instruction {
             Send(r) => {
                 let Some(register) = self.registers.get_mut(&r) else {
@@ -44,6 +51,7 @@ impl<
                 if register.history.len() > 1 {
                     register.history.pop_back();
                 }
+                self.history.push(register.value);
                 None
             }
             Set(left, right) => {
@@ -99,18 +107,21 @@ impl<
                 None
             }
             Receive(r) => {
-                if let Some(value) = self.get_value(r) {
-                    return Some(Execution::Receive(value));
+                let Some(x) = self.get_value(r) else {
+                    return None;
+                };
+                let Ok(0) = x.try_into() else {
+                    return self.history.last().map(|&v| Execution::Receive(v));
                 };
                 None
             }
             JumpIf(left, right, condition) => {
-                let Some(left_value) = (match left {
-                    Value::Register(left_register) => self.get_value(left_register),
-                    Value::Literal(literal) => Some(literal),
-                }) else {
-                    return None;
-                };
+                // let Some(left_value) = (match left {
+                //     Value::Register(left_register) => self.get_value(left_register),
+                //     Value::Literal(literal) => Some(literal),
+                // }) else {
+                //     return None;
+                // };
                 let Some(jump_by) = (match right {
                     Value::Register(right_register) => self.get_value(right_register),
                     Value::Literal(literal) => Some(literal),
@@ -125,7 +136,7 @@ impl<
                     return None;
                 };
 
-                let Some(right_compare) = (match condition.left {
+                let Some(right_compare) = (match condition.right {
                     Value::Register(left_register) => self.get_value(left_register),
                     Value::Literal(literal) => Some(literal),
                 }) else {
@@ -143,7 +154,9 @@ impl<
                 let Ok(ujump) = jump_by.try_into() else {
                     return None;
                 };
-                self.stack_pointer = (self.stack_pointer + ujump) % self.instructions.len();
+                // let outer_bound = self.instructions.iter().fold(0, |acc, _| acc + 1);
+                self.stack_pointer -= 1;
+                self.stack_pointer = (self.stack_pointer + ujump);
                 None
             }
         }
@@ -231,13 +244,13 @@ impl TryFrom<&str> for Instruction<isize> {
         let parts: Vec<&str> = s.trim().split_whitespace().collect();
         match parts[0] {
             "snd" => {
-                let Some(name) = s.chars().next() else {
+                let Some(name) = parts[1].chars().next() else {
                     return Err("Cannot build Value from empty &str");
                 };
                 Ok(Instruction::Send(name))
             }
             "set" => {
-                let Some(left) = s.chars().next() else {
+                let Some(left) = parts[1].chars().next() else {
                     return Err("Cannot build Value from empty &str");
                 };
                 let right = match Value::try_from(parts[2]) {
@@ -247,7 +260,7 @@ impl TryFrom<&str> for Instruction<isize> {
                 Ok(Instruction::Set(left, right))
             }
             "add" => {
-                let Some(left) = s.chars().next() else {
+                let Some(left) = parts[1].chars().next() else {
                     return Err("Cannot build Value from empty &str");
                 };
                 let right = match Value::try_from(parts[2]) {
@@ -257,7 +270,7 @@ impl TryFrom<&str> for Instruction<isize> {
                 Ok(Instruction::Add(left, right))
             }
             "mul" => {
-                let Some(left) = s.chars().next() else {
+                let Some(left) = parts[1].chars().next() else {
                     return Err("Cannot build Value from empty &str");
                 };
                 let right = match Value::try_from(parts[2]) {
@@ -267,7 +280,7 @@ impl TryFrom<&str> for Instruction<isize> {
                 Ok(Instruction::Multiply(left, right))
             }
             "mod" => {
-                let Some(left) = s.chars().next() else {
+                let Some(left) = parts[1].chars().next() else {
                     return Err("Cannot build Value from empty &str");
                 };
                 let right = match Value::try_from(parts[2]) {
@@ -277,7 +290,7 @@ impl TryFrom<&str> for Instruction<isize> {
                 Ok(Instruction::Modulate(left, right))
             }
             "rcv" => {
-                let Some(register) = s.chars().next() else {
+                let Some(register) = parts[1].chars().next() else {
                     return Err("Cannot build Value from empty &str");
                 };
                 Ok(Instruction::Receive(register))
@@ -400,6 +413,7 @@ fn read_input(path: &str) -> Emulator<isize> {
         registers,
         instructions,
         stack_pointer: 0,
+        history: Vec::new(),
     }
 }
 
@@ -409,6 +423,7 @@ fn part_one(emulator: Emulator<isize>) -> isize {
         if let Some(value) = (match emulator.execute_next_instruction() {
             Some(outcome) => match outcome {
                 Execution::Receive(i) => Some(i),
+                Execution::Halted => panic!("Program escaped bounds"),
             },
             None => None,
         }) {
@@ -420,4 +435,15 @@ fn part_one(emulator: Emulator<isize>) -> isize {
 fn main() {
     let emulator = read_input("input.txt");
     println!("Part one: {}", part_one(emulator));
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_part_one() {
+        let emulator = read_input("test.txt");
+        assert_eq!(part_one(emulator), 4);
+    }
 }
