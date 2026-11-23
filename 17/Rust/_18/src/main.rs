@@ -4,6 +4,7 @@ use std::fs;
 use std::ops::{Add, Mul, Rem};
 
 enum Execution<T> {
+    Send(T),
     Receive(T),
     Halted,
 }
@@ -13,6 +14,7 @@ struct Emulator<T> {
     registers: HashMap<char, Register<T>>,
     instructions: Vec<Instruction<T>>,
     stack_pointer: isize,
+    receiving: Option<char>,
     history: Vec<T>,
 }
 
@@ -157,6 +159,148 @@ impl<
                 // let outer_bound = self.instructions.iter().fold(0, |acc, _| acc + 1);
                 self.stack_pointer -= 1;
                 self.stack_pointer = (self.stack_pointer + ujump);
+                None
+            }
+        }
+    }
+
+    fn set_register(&mut self, register_name: char, value: T) {
+        let Some(register) = self.registers.get_mut(&register_name) else {
+            return;
+        };
+        register.value = value;
+    }
+
+    fn receive(&mut self, execution: Execution<T>) -> Option<Execution<T>> {
+        let Some(register_name) = self.receiving else {
+            return None;
+        };
+        match execution {
+            Execution::Send(value) => {
+                let Some(register) = self.registers.get_mut(&register_name) else {
+                    return None;
+                };
+                register.value = value;
+                self.receiving = None;
+                None
+            }
+            _ => None,
+        }
+    }
+
+    fn execute_channel_instruction(&mut self) -> Option<Execution<T>> {
+        use Instruction::*;
+        let instruction_index = self.stack_pointer as usize;
+        if instruction_index >= self.instructions.len() {
+            return Some(Execution::Halted);
+        }
+        let instruction = self.instructions[instruction_index];
+        self.stack_pointer += 1;
+        match instruction {
+            Send(r) => {
+                let Some(register) = self.registers.get_mut(&r) else {
+                    return None;
+                };
+                register.history.push_front(register.value);
+                if register.history.len() > 1 {
+                    register.history.pop_back();
+                }
+                self.history.push(register.value);
+                None
+            }
+            Set(left, right) => {
+                let Some(right_value) = (match right {
+                    Value::Register(right_register) => self.get_value(right_register),
+                    Value::Literal(literal) => Some(literal),
+                }) else {
+                    return None;
+                };
+                let Some(register) = self.registers.get_mut(&left) else {
+                    return None;
+                };
+                register.value = right_value;
+                None
+            }
+            Add(left, right) => {
+                let Some(right_value) = (match right {
+                    Value::Register(right_register) => self.get_value(right_register),
+                    Value::Literal(literal) => Some(literal),
+                }) else {
+                    return None;
+                };
+                let Some(register) = self.registers.get_mut(&left) else {
+                    return None;
+                };
+                register.value = register.value + right_value;
+                None
+            }
+            Multiply(left, right) => {
+                let Some(right_value) = (match right {
+                    Value::Register(right_register) => self.get_value(right_register),
+                    Value::Literal(literal) => Some(literal),
+                }) else {
+                    return None;
+                };
+                let Some(register) = self.registers.get_mut(&left) else {
+                    return None;
+                };
+                register.value = register.value * right_value;
+                None
+            }
+            Modulate(left, right) => {
+                let Some(right_value) = (match right {
+                    Value::Register(right_register) => self.get_value(right_register),
+                    Value::Literal(literal) => Some(literal),
+                }) else {
+                    return None;
+                };
+                let Some(register) = self.registers.get_mut(&left) else {
+                    return None;
+                };
+                register.value = register.value % right_value;
+                None
+            }
+            Receive(r) => {
+                self.receiving = Some(r);
+                Some(Execution::Receive(
+                    self.get_value(r).expect("Bad register value to receive to"),
+                ))
+            }
+            JumpIf(_, right, condition) => {
+                let Some(jump_by) = (match right {
+                    Value::Register(right_register) => self.get_value(right_register),
+                    Value::Literal(literal) => Some(literal),
+                }) else {
+                    return None;
+                };
+
+                let Some(left_compare) = (match condition.left {
+                    Value::Register(left_register) => self.get_value(left_register),
+                    Value::Literal(literal) => Some(literal),
+                }) else {
+                    return None;
+                };
+
+                let Some(right_compare) = (match condition.right {
+                    Value::Register(left_register) => self.get_value(left_register),
+                    Value::Literal(literal) => Some(literal),
+                }) else {
+                    return None;
+                };
+
+                let should_jump = match condition.comparator {
+                    Comparator::EqualTo => left_compare == right_compare,
+                    Comparator::GreaterThan => left_compare > right_compare,
+                    Comparator::LessThan => left_compare < right_compare,
+                };
+                if !should_jump {
+                    return None;
+                }
+                let Ok(ujump) = jump_by.try_into() else {
+                    return None;
+                };
+                self.stack_pointer -= 1;
+                self.stack_pointer = self.stack_pointer + ujump;
                 None
             }
         }
@@ -413,6 +557,7 @@ fn read_input(path: &str) -> Emulator<isize> {
         registers,
         instructions,
         stack_pointer: 0,
+        receiving: None,
         history: Vec::new(),
     }
 }
@@ -424,6 +569,7 @@ fn part_one(emulator: Emulator<isize>) -> isize {
             Some(outcome) => match outcome {
                 Execution::Receive(i) => Some(i),
                 Execution::Halted => panic!("Program escaped bounds"),
+                _ => None,
             },
             None => None,
         }) {
@@ -432,9 +578,60 @@ fn part_one(emulator: Emulator<isize>) -> isize {
     }
 }
 
+fn part_two(emulator: Emulator<isize>) -> usize {
+    let mut one = emulator.clone();
+    let mut one_send_queue = VecDeque::new();
+    let mut two = emulator.clone();
+    let mut two_send_queue = VecDeque::new();
+
+    one.set_register('p', 0);
+    two.set_register('p', 1);
+
+    loop {
+        let one_option = match one.receiving {
+            Some(register_name) => {
+                if let Some(value) = two_send_queue.pop_front() {
+                    one.receive(value);
+                }
+                None
+            }
+            None => one.execute_channel_instruction(),
+        };
+        let two_option = match two.receiving {
+            Some(register_name) => {
+                if let Some(value) = one_send_queue.pop_front() {
+                    two.receive(value);
+                }
+                None
+            }
+            None => two.execute_channel_instruction(),
+        };
+        if one.receiving.is_some() && two.receiving.is_some() {
+            return one.history.len();
+        }
+        if let Some(one_execution) = one_option {
+            match one_execution {
+                Execution::Send(value) => {
+                    one_send_queue.push_back(Execution::Send(value));
+                }
+                _ => {}
+            }
+        }
+        if let Some(two_execution) = two_option {
+            match two_execution {
+                Execution::Send(value) => {
+                    two_send_queue.push_back(Execution::Send(value));
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
 fn main() {
     let emulator = read_input("input.txt");
-    println!("Part one: {}", part_one(emulator));
+    println!("Part one: {}", part_one(emulator.clone()));
+    println!("Part two: {}", part_two(emulator));
 }
 
 #[cfg(test)]
@@ -445,5 +642,11 @@ mod test {
     fn test_part_one() {
         let emulator = read_input("test.txt");
         assert_eq!(part_one(emulator), 4);
+    }
+
+    #[test]
+    fn test_part_two() {
+        let emulator = read_input("test2.txt");
+        assert_eq!(part_two(emulator), 3);
     }
 }
