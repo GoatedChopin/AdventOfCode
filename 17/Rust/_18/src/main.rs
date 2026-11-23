@@ -206,7 +206,7 @@ impl<
                     register.history.pop_back();
                 }
                 self.history.push(register.value);
-                None
+                Some(Execution::Send(register.value))
             }
             Set(left, right) => {
                 let Some(right_value) = (match right {
@@ -606,8 +606,12 @@ fn part_two(emulator: Emulator<isize>) -> usize {
             }
             None => two.execute_channel_instruction(),
         };
-        if one.receiving.is_some() && two.receiving.is_some() {
-            return one.history.len();
+        if one.receiving.is_some()
+            && two_send_queue.is_empty()
+            && two.receiving.is_some()
+            && one_send_queue.is_empty()
+        {
+            return two.history.len();
         }
         if let Some(one_execution) = one_option {
             match one_execution {
